@@ -602,4 +602,64 @@ function refreshProgress(){
 refreshProgress();
 
 function showCard(text){
-  msgEl.textConte
+  msgEl.textContent=text; cardEl.classList.add('show');
+  clearTimeout(cardTimer);
+  cardTimer=setTimeout(()=>cardEl.classList.remove('show'), 2000);
+}
+
+let clearing=false, clearT=0;
+function collect(s){
+  s.userData.alive=false;
+  // pop animation then remove
+  const start=performance.now();
+  (function pop(){
+    const t=(performance.now()-start)/280;
+    if(t<1){ s.scale.setScalar(1+t*1.4); s.children.forEach(c=>{if(c.material)c.material.opacity=1-t;});
+      requestAnimationFrame(pop); }
+    else planet.remove(s);
+  })();
+  collected++; refreshProgress();
+  showCard(FORTUNES[Math.floor(Math.random()*FORTUNES.length)]);
+  if(collected>=7) triggerClear();
+}
+function triggerClear(){
+  setTimeout(()=>{
+    buildConstellation(); clearing=true; clearT=0;
+    document.getElementById('clear').classList.add('show');
+  }, 900);
+}
+
+// ============================================================
+//  LOOP / RESIZE / START
+// ============================================================
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+let last=performance.now();
+function loop(now){
+  const dt=Math.min((now-last)/1000,0.05); last=now;
+  if(started) update(dt);
+  renderer.render(scene,camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// start
+const startEl=document.getElementById('start');
+function begin(){
+  if(started)return; started=true;
+  startEl.classList.add('hide');
+  // show stick on touch devices
+  if(matchMedia('(hover:none)').matches) stickEl.style.display='block';
+}
+document.getElementById('startBtn').addEventListener('click',begin);
+startEl.addEventListener('touchstart',begin,{passive:true});
+
+// expose for debug
+window.__seiya={scene,camera,pivot,collect:()=>shards.forEach(s=>s.userData.alive&&collect(s))};
+})();
+</script>
+</body>
+</html>
