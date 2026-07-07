@@ -60,6 +60,7 @@
     font-size:clamp(13px,3.6vw,15px);letter-spacing:.1em;background:rgba(127,227,212,.08);
     box-shadow:0 0 22px rgba(127,227,212,.25);transition:.3s;}
   #clear .cta:hover{background:rgba(127,227,212,.18);box-shadow:0 0 30px rgba(127,227,212,.5);}
+  #clear .cls{margin-top:18px;font-size:11px;letter-spacing:.2em;opacity:.6;cursor:pointer;}
   #clear .big{font-size:clamp(22px,6.4vw,34px);letter-spacing:.2em;
     text-shadow:0 0 24px rgba(201,167,255,.7);}
   #clear .sub{margin-top:14px;font-size:clamp(12px,3.4vw,15px);letter-spacing:.16em;opacity:.85;line-height:1.9;}
@@ -115,6 +116,7 @@
     <div class="big">星 が 巡 っ た</div>
     <div class="sub">七つの光が空に道をひらいた。<br><b>星夜堂</b>は、あなたの夜にそっと灯りをともします。</div>
     <a class="cta" href="https://lin.ee/hoshiyorudou" target="_blank" rel="noopener">🌙 LINEで毎日の運勢を受け取る（無料）</a>
+    <div class="cls">× とじて 星の散歩をつづける</div>
   </div>
 
   <div id="stick"><div class="knob"></div></div>
@@ -338,7 +340,7 @@ function makeShard(dir, spot){
   const core = cel(new THREE.OctahedronGeometry(0.5,0), COL.lantern, 0.05, COL.lantern, 1.1);
   core.material.transparent = true;   // 回収時のフェード演出を効かせる
   g.add(core);
-  const hl = halo(COL.lantern, 2.2); g.add(hl);
+  const hl = halo(COL.lantern, 2.2); g.add(hl); g.userData.halo = hl;
   const em = emojiSprite(spot.icon); em.position.y = 1.4; g.add(em);
   placeOnSphere(g, dir, 2.2);      // float above surface
   g.userData.core = core; g.userData.baseDir = dir.clone().normalize();
@@ -573,14 +575,16 @@ function update(dt){
   lookAt.lerp(_look, 1-Math.pow(0.0008,dt));
   camera.lookAt(lookAt);
 
-  // ---- shards : bob / spin / collect ----  (_cp = traveler world pos)
+  // ---- shards : bob / spin / visit ----  (_cp = traveler world pos)
   shards.forEach(s=>{
-    if(!s.userData.alive)return;
     s.userData.phase+=dt*2;
     const bob=Math.sin(s.userData.phase)*0.25;
     s.position.copy(_sv.copy(s.userData.baseDir).multiplyScalar(R+2.2+bob));
     s.userData.core.rotation.y+=dt*1.5; s.userData.core.rotation.x+=dt*0.8;
-    if(s.position.distanceTo(_cp)<2.6) collect(s);
+    // 近接でカード表示（離れて再接近すれば何度でも表示：ヒステリシス付き）
+    const d=s.position.distanceTo(_cp);
+    if(d<2.6){ if(!s.userData.inRange){ s.userData.inRange=true; visit(s); } }
+    else if(d>3.8){ s.userData.inRange=false; }
   });
 
   // crystals gentle pulse
@@ -631,6 +635,7 @@ refreshProgress();
 
 const lblEl=cardEl.querySelector('.lbl'), iconEl=cardEl.querySelector('.icon'), goEl=cardEl.querySelector('.go');
 cardEl.querySelector('.close').addEventListener('click',()=>cardEl.classList.remove('show'));
+document.querySelector('#clear .cls').addEventListener('click',()=>document.getElementById('clear').classList.remove('show'));
 function showSpot(spot){
   iconEl.textContent=spot.icon; lblEl.textContent=spot.label;
   msgEl.textContent=spot.desc; goEl.href=spot.url;
@@ -640,19 +645,18 @@ function showSpot(spot){
 }
 
 let clearing=false, clearT=0;
-function collect(s){
-  s.userData.alive=false;
-  // pop animation then remove
-  const start=performance.now();
-  (function pop(){
-    const t=(performance.now()-start)/280;
-    if(t<1){ s.scale.setScalar(1+t*1.4); s.children.forEach(c=>{if(c.material)c.material.opacity=1-t;});
-      requestAnimationFrame(pop); }
-    else planet.remove(s);
-  })();
-  collected++; refreshProgress();
+// 訪問：スポットは消えず、何度でも近づいてカードを見られる
+function visit(s){
   showSpot(s.userData.spot);
-  if(collected>=7) triggerClear();
+  if(!s.userData.visited){
+    s.userData.visited=true;
+    collected++; refreshProgress();
+    // 訪問済みの目印：灯を金色→青緑に変える
+    s.userData.core.material.color.set(COL.crys1);
+    s.userData.core.material.emissive.set(COL.crys1);
+    if(s.userData.halo) s.userData.halo.material.color.set(COL.crys1);
+    if(collected>=7) triggerClear();
+  }
 }
 function triggerClear(){
   setTimeout(()=>{
@@ -691,7 +695,7 @@ document.getElementById('startBtn').addEventListener('click',begin);
 startEl.addEventListener('touchstart',begin,{passive:true});
 
 // expose for debug
-window.__seiya={scene,camera,pivot,collect:()=>shards.forEach(s=>s.userData.alive&&collect(s))};
+window.__seiya={scene,camera,pivot,shards,visit,collect:()=>shards.forEach(s=>visit(s))};
 })();
 </script>
 </body>
