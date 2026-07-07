@@ -33,23 +33,54 @@
     box-shadow:0 0 10px 2px rgba(255,212,127,.8);}
   #progress .cnt{font-size:12px;letter-spacing:.1em;opacity:.85;margin-left:4px;}
 
-  /* fortune card */
-  #card{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%) scale(.9);
-    min-width:min(78vw,320px);max-width:86vw;padding:22px 26px;text-align:center;
-    background:linear-gradient(160deg,rgba(31,38,74,.92),rgba(20,26,58,.92));
-    border:1px solid rgba(201,167,255,.45);border-radius:18px;
-    box-shadow:0 18px 50px rgba(0,0,0,.5),inset 0 0 30px rgba(127,227,212,.06);
-    opacity:0;transition:opacity .5s,transform .5s;backdrop-filter:blur(6px);pointer-events:none;}
-  #card.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto;}
-  #card .icon{font-size:32px;margin-bottom:10px;}
-  #card .go{display:inline-block;margin-top:16px;padding:11px 26px;border-radius:999px;
+  /* info card — PC:右スライドパネル / スマホ:ボトムシート（3D世界を隠さない） */
+  #card{position:absolute;right:0;top:50%;width:300px;max-width:82vw;
+    transform:translate(112%,-50%);padding:24px 22px 16px;text-align:center;
+    background:
+      radial-gradient(1.2px 1.2px at 18% 22%, rgba(255,255,255,.5), transparent 60%),
+      radial-gradient(1px 1px at 72% 12%, rgba(255,255,255,.35), transparent 60%),
+      radial-gradient(1px 1px at 40% 58%, rgba(255,255,255,.28), transparent 60%),
+      radial-gradient(1.4px 1.4px at 86% 44%, rgba(255,255,255,.4), transparent 60%),
+      radial-gradient(1px 1px at 12% 80%, rgba(255,255,255,.3), transparent 60%),
+      radial-gradient(1px 1px at 62% 90%, rgba(255,255,255,.22), transparent 60%),
+      linear-gradient(168deg, rgba(31,38,74,.97) 0%, rgba(26,34,68,.97) 48%, rgba(18,20,46,.98) 100%);
+    border:1px solid rgba(255,212,127,.5);border-radius:16px 0 0 16px;
+    box-shadow:0 18px 50px rgba(0,0,0,.55), inset 0 0 26px rgba(127,227,212,.05);
+    transition:transform .55s cubic-bezier(.22,.9,.3,1),opacity .4s;opacity:0;
+    backdrop-filter:blur(6px);pointer-events:none;touch-action:pan-y;}
+  #card::before{content:"";position:absolute;inset:5px;border:1px solid rgba(255,212,127,.22);
+    border-radius:12px 0 0 12px;pointer-events:none;}
+  #card.show{opacity:1;transform:translate(0,-50%);pointer-events:auto;}
+  #card .icon{font-size:30px;margin-bottom:8px;}
+  #card .lbl{font-family:"Hiragino Mincho ProN","Yu Mincho","MS PMincho",serif;
+    font-size:15px;letter-spacing:.3em;color:var(--lantern);margin-bottom:2px;}
+  #card .constel{width:88%;height:22px;margin:8px auto 10px;display:block;}
+  #card .constel path{stroke-dasharray:100;stroke-dashoffset:100;}
+  #card.show .constel path{animation:constelDraw .6s ease-out .15s forwards;}
+  #card .constel circle{opacity:.2;}
+  #card.show .constel circle{animation:starTwinkle 2.4s ease-in-out infinite alternate;}
+  #card.show .constel circle:nth-of-type(2){animation-delay:.5s;}
+  #card.show .constel circle:nth-of-type(3){animation-delay:.9s;}
+  #card.show .constel circle:nth-of-type(4){animation-delay:.3s;}
+  #card.show .constel circle:nth-of-type(5){animation-delay:1.2s;}
+  #card.show .constel circle:nth-of-type(6){animation-delay:.7s;}
+  @keyframes constelDraw{to{stroke-dashoffset:0;}}
+  @keyframes starTwinkle{from{opacity:.2;}to{opacity:1;}}
+  #card .msg{font-size:14px;line-height:1.9;letter-spacing:.04em;text-align:left;
+    color:var(--ink);font-weight:500;}
+  #card .go{display:block;margin-top:16px;padding:12px 0;border-radius:999px;text-align:center;
     border:1px solid rgba(255,212,127,.65);color:var(--lantern);text-decoration:none;
     font-size:13px;letter-spacing:.12em;background:rgba(255,212,127,.08);transition:.3s;}
   #card .go:hover{background:rgba(255,212,127,.18);box-shadow:0 0 18px rgba(255,212,127,.35);}
-  #card .close{margin-top:12px;font-size:11px;letter-spacing:.24em;opacity:.55;cursor:pointer;}
-  #card .lbl{font-size:10px;letter-spacing:.4em;color:var(--crys1);opacity:.8;margin-bottom:12px;}
-  #card .msg{font-size:clamp(16px,4.6vw,21px);line-height:1.7;letter-spacing:.06em;}
-  #card .orn{margin-top:12px;font-size:11px;letter-spacing:.3em;color:var(--lantern);opacity:.75;}
+  #card .close{margin-top:12px;font-size:11px;letter-spacing:.24em;opacity:.6;cursor:pointer;}
+  /* スマホ・狭い画面：ボトムシート（スティックと反対の右下） */
+  @media (hover:none), (max-width:560px){
+    #card{top:auto;left:auto;right:8px;bottom:calc(10px + env(safe-area-inset-bottom,0));
+      width:min(76vw,340px);max-height:38vh;overflow-y:auto;
+      transform:translate(0,135%);border-radius:16px;}
+    #card::before{border-radius:12px;}
+    #card.show{transform:translate(0,0);}
+  }
 
   /* clear banner */
   #clear{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
@@ -107,6 +138,13 @@
   <div id="card">
     <div class="icon">✦</div>
     <div class="lbl">星 夜 堂 の 灯</div>
+    <svg class="constel" viewBox="0 0 240 26" aria-hidden="true">
+      <path d="M8,18 L52,8 L96,16 L132,6 L172,15 L232,10" fill="none" stroke="#ffd47f" stroke-width="1" pathLength="100"/>
+      <g fill="#ffd47f">
+        <circle cx="8" cy="18" r="1.6"/><circle cx="52" cy="8" r="2"/><circle cx="96" cy="16" r="1.4"/>
+        <circle cx="132" cy="6" r="2"/><circle cx="172" cy="15" r="1.5"/><circle cx="232" cy="10" r="1.8"/>
+      </g>
+    </svg>
     <div class="msg">—</div>
     <a class="go" href="https://hoshiyorudou.com/" target="_blank" rel="noopener">くわしく見る →</a>
     <div class="close">と じ る</div>
@@ -356,6 +394,117 @@ const shardDirs = [
 shardDirs.forEach((d,i)=>makeShard(d, SPOTS[i]));
 
 // ============================================================
+//  LANDMARKS（地表の密度アップ：一周の道・街灯・星門・立て札・ベンチ・旗・岩）
+// ============================================================
+const flagsAnim=[];
+function lampPost(dir){
+  const g=new THREE.Group();
+  const pole=cel(new THREE.CylinderGeometry(0.07,0.1,2.1,8), 0x2c356b, 0.03);
+  pole.position.y=1.05; g.add(pole);
+  const head=cel(new THREE.BoxGeometry(0.3,0.36,0.3), 0xfff0c8, 0.03, COL.lantern, 1.3);
+  head.position.y=2.25; g.add(head);
+  const cap=cel(new THREE.ConeGeometry(0.27,0.24,4), 0x232a54, 0.03);
+  cap.position.y=2.55; cap.rotation.y=Math.PI/4; g.add(cap);
+  const hl=halo(COL.lantern,1.6); hl.position.y=2.25; g.add(hl);
+  placeOnSphere(g,dir,0);
+  obstacles.push({dir:dir.clone().normalize(), cos:Math.cos(0.045)});
+}
+function signpost(dir){
+  const g=new THREE.Group();
+  const post=cel(new THREE.CylinderGeometry(0.06,0.09,1.3,6), 0x2c356b, 0.02);
+  post.position.y=0.65; g.add(post);
+  const board=cel(new THREE.BoxGeometry(0.95,0.5,0.08), 0x4a5688, 0.03);
+  board.position.y=1.28; board.rotation.y=(Math.random()-.5)*1.2; g.add(board);
+  const star=cel(new THREE.OctahedronGeometry(0.09,0), COL.lantern, 0.02, COL.lantern, 0.9);
+  star.position.y=1.62; g.add(star);
+  placeOnSphere(g,dir,0);
+}
+function bench(dir,rot){
+  const g=new THREE.Group();
+  const seat=cel(new THREE.BoxGeometry(1.25,0.1,0.42), 0x39456e, 0.03);
+  seat.position.y=0.42; g.add(seat);
+  for(let s=-1;s<=1;s+=2){
+    const leg=cel(new THREE.BoxGeometry(0.1,0.42,0.38), 0x2c3860, 0.02);
+    leg.position.set(0.48*s,0.21,0); g.add(leg);
+  }
+  const back=cel(new THREE.BoxGeometry(1.25,0.4,0.08), 0x39456e, 0.03);
+  back.position.set(0,0.75,-0.2); back.rotation.x=-0.12; g.add(back);
+  placeOnSphere(g,dir,0); g.rotateY(rot||0);
+}
+function flag(dir,rot){
+  const g=new THREE.Group();
+  const pole=cel(new THREE.CylinderGeometry(0.05,0.07,2.0,6), 0x2c356b, 0.02);
+  pole.position.y=1.0; g.add(pole);
+  const cloth=cel(new THREE.ConeGeometry(0.34,0.75,3), COL.crys2, 0.02, COL.crys2, 0.3);
+  cloth.rotation.z=-Math.PI/2; cloth.position.set(0.42,1.78,0); g.add(cloth);
+  placeOnSphere(g,dir,0); g.rotateY(rot||0);
+  flagsAnim.push(cloth);
+}
+function starGate(dir,tan){
+  const g=new THREE.Group();
+  for(let s=-1;s<=1;s+=2){
+    const p=cel(new THREE.CylinderGeometry(0.15,0.2,2.6,8), 0x4a5688, 0.04);
+    p.position.set(0.95*s,1.3,0); g.add(p);
+  }
+  const bar=cel(new THREE.BoxGeometry(2.6,0.2,0.28), 0x39456e, 0.04);
+  bar.position.y=2.6; g.add(bar);
+  const bar2=cel(new THREE.BoxGeometry(2.15,0.12,0.22), 0x39456e, 0.03);
+  bar2.position.y=2.25; g.add(bar2);
+  const star=cel(new THREE.OctahedronGeometry(0.17,0), COL.lantern, 0.03, COL.lantern, 1.1);
+  star.position.y=2.95; g.add(star);
+  placeOnSphere(g,dir,0);
+  // 開口を道の向きに合わせる
+  const lx=V3(1,0,0).applyQuaternion(g.quaternion), lz=V3(0,0,1).applyQuaternion(g.quaternion);
+  g.rotateY(Math.atan2(-tan.dot(lz), tan.dot(lx)));
+  g.updateMatrixWorld(true);
+  for(let s=-1;s<=1;s+=2){
+    const wp=g.localToWorld(V3(0.95*s,0,0)).normalize();
+    obstacles.push({dir:wp, cos:Math.cos(0.05)});
+  }
+}
+(function landmarks(){
+  // --- 惑星を一周する石畳の道（大円）：「歩けば何かがある」を1枚で伝える ---
+  const axis=V3(0.35,1,0.25).normalize();
+  const u=V3(1,0,0).cross(axis).normalize();
+  const v=axis.clone().cross(u).normalize();
+  const ringDir=t=>u.clone().multiplyScalar(Math.cos(t)).add(v.clone().multiplyScalar(Math.sin(t))).normalize();
+  const ringTan=t=>axis.clone().cross(ringDir(t)).normalize();
+  const steps=48;
+  for(let i=0;i<steps;i++){
+    const st=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.14,6), toon(COL.path));
+    st.rotation.y=Math.random()*Math.PI;
+    placeOnSphere(st, ringDir(i/steps*Math.PI*2), 0.02);
+    st.scale.set(1+Math.random()*.3,1,1+Math.random()*.3);
+  }
+  // 街灯：道沿いに交互配置
+  for(let k=0;k<6;k++){
+    const t=k/6*Math.PI*2+0.25;
+    const d=ringDir(t).add(axis.clone().multiplyScalar((k%2?1:-1)*0.10)).normalize();
+    lampPost(d);
+  }
+  // 星門：道をまたぐ×2
+  starGate(ringDir(0.9), ringTan(0.9));
+  starGate(ringDir(0.9+Math.PI), ringTan(0.9+Math.PI));
+  // 立て札：各情報スポットの足元に目印
+  shardDirs.forEach(d=>{
+    signpost(d.clone().normalize().add(axis.clone().multiplyScalar(0.08)).normalize());
+  });
+  // ベンチ・旗・岩・結晶で密度を上げる
+  bench(V3(0.32,0.86,0.4).normalize(), 0.6);
+  bench(V3(-0.55,0.5,-0.68).normalize(), 2.2);
+  bench(V3(0.75,-0.4,0.53).normalize(), 4.0);
+  flag(ringDir(0.45).add(axis.clone().multiplyScalar(0.14)).normalize(), 1.0);
+  flag(ringDir(2.1).add(axis.clone().multiplyScalar(-0.14)).normalize(), 2.4);
+  flag(ringDir(3.6).add(axis.clone().multiplyScalar(0.14)).normalize(), 0.2);
+  flag(ringDir(5.2).add(axis.clone().multiplyScalar(-0.14)).normalize(), 3.1);
+  for(let i=0;i<4;i++) crystalCluster(randDir());
+  for(let i=0;i<10;i++){
+    const r=new THREE.Mesh(new THREE.DodecahedronGeometry(0.22+Math.random()*0.3,0), toon(COL.rock));
+    placeOnSphere(r, randDir(), 0.08); r.rotateY(Math.random()*3);
+  }
+})();
+
+// ============================================================
 //  SKY : starfield (Points) + shooting stars + constellation
 // ============================================================
 (function starfield(){
@@ -518,7 +667,8 @@ const AX_X=V3(1,0,0), AX_Y=V3(0,1,0);
 const _q=new THREE.Quaternion(), _qSave=new THREE.Quaternion();
 const _cp=new THREE.Vector3(), _up=new THREE.Vector3(), _fw=new THREE.Vector3();
 const _desired=new THREE.Vector3(), _look=new THREE.Vector3(), _sv=new THREE.Vector3();
-const _dir=new THREE.Vector3();
+const _dir=new THREE.Vector3(), _ft=new THREE.Vector3();
+let camFocus=null, camFocusK=0;   // カード表示中にカメラを灯へ寄せる
 
 function update(dt){
   // input → forward / turn
@@ -569,9 +719,14 @@ function update(dt){
   _up.copy(_cp).normalize();
   _fw.set(0,0,-1).applyQuaternion(pivot.quaternion).normalize();
   _desired.copy(_cp).addScaledVector(_fw,-9).addScaledVector(_up,5.2);
+  // カード表示中：ランプ方向へ13%ゆっくり寄る（閉じるとlerpで戻る）
+  camFocusK += ((camFocus?1:0)-camFocusK)*(1-Math.pow(0.02,dt));
+  if(camFocus) camFocus.getWorldPosition(_ft);
+  if(camFocusK>0.002) _desired.lerp(_ft, 0.13*camFocusK);
   camera.position.lerp(_desired, 1-Math.pow(0.001,dt));
   camUp.lerp(_up, 1-Math.pow(0.0005,dt)).normalize(); camera.up.copy(camUp);
   _look.copy(_cp).addScaledVector(_up,1.6);
+  if(camFocusK>0.002) _look.lerp(_ft, 0.2*camFocusK);
   lookAt.lerp(_look, 1-Math.pow(0.0008,dt));
   camera.lookAt(lookAt);
 
@@ -595,6 +750,9 @@ function update(dt){
   const lp=traveler.userData.lp;
   lp.intensity = 1.6 + Math.sin(performance.now()*0.006)*0.18 + Math.random()*0.05;
   traveler.userData.lanternHalo.scale.setScalar(2.5+Math.sin(performance.now()*0.005)*0.15);
+
+  // 旗のはためき
+  for(let i=0;i<flagsAnim.length;i++) flagsAnim[i].rotation.x=Math.sin(performance.now()*0.002+i*1.7)*0.12;
 
   // shooting stars
   nextShoot-=dt; if(nextShoot<=0){ spawnShooter(); nextShoot=3+Math.random()*4; }
@@ -634,19 +792,20 @@ function refreshProgress(){
 refreshProgress();
 
 const lblEl=cardEl.querySelector('.lbl'), iconEl=cardEl.querySelector('.icon'), goEl=cardEl.querySelector('.go');
-cardEl.querySelector('.close').addEventListener('click',()=>cardEl.classList.remove('show'));
+cardEl.querySelector('.close').addEventListener('click',()=>{cardEl.classList.remove('show'); camFocus=null;});
 document.querySelector('#clear .cls').addEventListener('click',()=>document.getElementById('clear').classList.remove('show'));
 function showSpot(spot){
   iconEl.textContent=spot.icon; lblEl.textContent=spot.label;
   msgEl.textContent=spot.desc; goEl.href=spot.url;
   cardEl.classList.add('show');
   clearTimeout(cardTimer);
-  cardTimer=setTimeout(()=>cardEl.classList.remove('show'), 12000);
+  cardTimer=setTimeout(()=>{cardEl.classList.remove('show'); camFocus=null;}, 15000);
 }
 
 let clearing=false, clearT=0;
 // 訪問：スポットは消えず、何度でも近づいてカードを見られる
 function visit(s){
+  camFocus=s;   // カメラをこの灯へゆっくり寄せる
   showSpot(s.userData.spot);
   if(!s.userData.visited){
     s.userData.visited=true;
@@ -660,7 +819,7 @@ function visit(s){
 }
 function triggerClear(){
   setTimeout(()=>{
-    cardEl.classList.remove('show');   // 最後の情報カードを閉じてクリア演出と重ねない
+    cardEl.classList.remove('show'); camFocus=null;   // 最後の情報カードを閉じてクリア演出と重ねない
     buildConstellation(); clearing=true; clearT=0;
     document.getElementById('clear').classList.add('show');
   }, 3200);
