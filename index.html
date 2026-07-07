@@ -656,9 +656,10 @@ function collect(s){
 }
 function triggerClear(){
   setTimeout(()=>{
+    cardEl.classList.remove('show');   // 最後の情報カードを閉じてクリア演出と重ねない
     buildConstellation(); clearing=true; clearT=0;
     document.getElementById('clear').classList.add('show');
-  }, 900);
+  }, 3200);
 }
 
 // ============================================================
