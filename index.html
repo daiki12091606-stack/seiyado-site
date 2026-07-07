@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>星夜堂 ｜ 夜の星めぐり</title>
+<style>
+  :root{
+    --sky:#1a2244; --ground:#3b4a6e; --crys1:#7fe3d4; --crys2:#c9a7ff;
+    --lantern:#ffd47f; --line:#12142e; --ink:#e8ecff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#0d1330;
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+    color:var(--ink);-webkit-tap-highlight-color:transparent;touch-action:none;}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;}
+
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10;}
+  #brand{position:absolute;top:env(safe-area-inset-top,0);left:0;right:0;
+    padding:14px 16px 0;display:flex;justify-content:space-between;align-items:flex-start;}
+  #brand .title{font-size:clamp(13px,3.6vw,17px);letter-spacing:.28em;
+    text-shadow:0 2px 12px rgba(0,0,0,.6);opacity:.9;}
+  #brand .title small{display:block;letter-spacing:.14em;font-size:.62em;opacity:.6;margin-top:3px;}
+  #progress{display:flex;gap:6px;align-items:center;background:rgba(18,20,46,.42);
+    border:1px solid rgba(201,167,255,.28);border-radius:999px;padding:6px 12px;
+    backdrop-filter:blur(4px);}
+  #progress .star{width:12px;height:12px;border-radius:50%;
+    background:rgba(255,212,127,.16);box-shadow:inset 0 0 0 1px rgba(255,212,127,.4);
+    transition:.4s;}
+  #progress .star.on{background:var(--lantern);
+    box-shadow:0 0 10px 2px rgba(255,212,127,.8);}
+  #progress .cnt{font-size:12px;letter-spacing:.1em;opacity:.85;margin-left:4px;}
+
+  /* fortune card */
+  #card{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%) scale(.9);
+    min-width:min(78vw,320px);max-width:86vw;padding:22px 26px;text-align:center;
+    background:linear-gradient(160deg,rgba(31,38,74,.92),rgba(20,26,58,.92));
+    border:1px solid rgba(201,167,255,.45);border-radius:18px;
+    box-shadow:0 18px 50px rgba(0,0,0,.5),inset 0 0 30px rgba(127,227,212,.06);
+    opacity:0;transition:opacity .5s,transform .5s;backdrop-filter:blur(6px);}
+  #card.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+  #card .lbl{font-size:10px;letter-spacing:.4em;color:var(--crys1);opacity:.8;margin-bottom:12px;}
+  #card .msg{font-size:clamp(16px,4.6vw,21px);line-height:1.7;letter-spacing:.06em;}
+  #card .orn{margin-top:12px;font-size:11px;letter-spacing:.3em;color:var(--lantern);opacity:.75;}
+
+  /* clear banner */
+  #clear{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    text-align:center;opacity:0;transition:opacity 1.4s;pointer-events:none;padding:0 20px;}
+  #clear.show{opacity:1;}
+  #clear .big{font-size:clamp(22px,6.4vw,34px);letter-spacing:.2em;
+    text-shadow:0 0 24px rgba(201,167,255,.7);}
+  #clear .sub{margin-top:14px;font-size:clamp(12px,3.4vw,15px);letter-spacing:.16em;opacity:.85;line-height:1.9;}
+  #clear .sub b{color:var(--crys1);font-weight:400;}
+
+  /* joystick */
+  #stick{position:absolute;left:24px;bottom:calc(28px + env(safe-area-inset-bottom,0));
+    width:120px;height:120px;border-radius:50%;pointer-events:auto;
+    background:radial-gradient(circle,rgba(201,167,255,.08),rgba(18,20,46,.28));
+    border:1px solid rgba(201,167,255,.22);display:none;touch-action:none;}
+  #stick .knob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;
+    border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(255,212,127,.9),rgba(255,180,90,.5));
+    box-shadow:0 0 18px rgba(255,212,127,.55);transition:transform .04s;}
+
+  /* start / help overlay */
+  #start{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    align-items:center;gap:22px;background:radial-gradient(circle at 50% 40%,rgba(31,38,74,.5),rgba(10,14,38,.86));
+    pointer-events:auto;text-align:center;padding:24px;transition:opacity .8s;}
+  #start.hide{opacity:0;pointer-events:none;}
+  #start h1{font-size:clamp(24px,7vw,40px);letter-spacing:.24em;font-weight:400;
+    text-shadow:0 0 30px rgba(201,167,255,.6);}
+  #start h1 small{display:block;font-size:.4em;letter-spacing:.4em;color:var(--crys1);
+    margin-top:14px;opacity:.85;}
+  #start p{font-size:clamp(12px,3.4vw,14px);line-height:2;opacity:.82;letter-spacing:.08em;max-width:340px;}
+  #start .btn{margin-top:6px;padding:13px 34px;border-radius:999px;letter-spacing:.24em;font-size:14px;
+    border:1px solid rgba(255,212,127,.6);color:var(--lantern);
+    background:rgba(255,212,127,.06);cursor:pointer;transition:.3s;}
+  #start .btn:hover{background:rgba(255,212,127,.16);box-shadow:0 0 24px rgba(255,212,127,.4);}
+  #hint{position:absolute;bottom:calc(20px + env(safe-area-inset-bottom,0));left:0;right:0;
+    text-align:center;font-size:11px;letter-spacing:.16em;opacity:.5;}
+  @media (hover:none){ #hint .kbd{display:none;} }
+  @media (hover:hover){ #hint .touch{display:none;} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="hud">
+  <div id="brand">
+    <div class="title">星 夜 堂<small>SEIYADO ｜ 夜の星めぐり</small></div>
+    <div id="progress"><span class="cnt">☆ 0 / 7</span></div>
+  </div>
+
+  <div id="card">
+    <div class="lbl">今 日 の ひ と こ と</div>
+    <div class="msg">—</div>
+    <div class="orn">✦</div>
+  </div>
+
+  <div id="clear">
+    <div class="big">星 が 巡 っ た</div>
+    <div class="sub">七つの光が空に道をひらいた。<br><b>星夜堂</b>は、あなたの夜にそっと灯りをともします。</div>
+  </div>
+
+  <div id="stick"><div class="knob"></div></div>
+
+  <div id="hint">
+    <span class="kbd">WASD / 矢印キー で 旅人をあるかせる</span>
+    <span class="touch">左下のスティックを ドラッグ して あるく</span>
+  </div>
+
+  <div id="start">
+    <h1>夜 の 星 め ぐ り<small>星 夜 堂</small></h1>
+    <p>小さな星のうえを歩き、夜空にちらばった<br>七つの「星のかけら」を集めましょう。<br>集めるたび、今日のひとことが灯ります。</p>
+    <div class="btn" id="startBtn">は じ め る</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ============================================================
+   星夜堂 ｜ 夜の星めぐり  —  single-file Three.js demo
+   球面重力歩行 / セルルック＋濃紺輪郭線 / 三人称追従カメラ
+   ============================================================ */
+(() => {
+'use strict';
+const TColor = THREE.Color;
+const V3 = (x,y,z)=>new THREE.Vector3(x,y,z);
+
+// ---- constants / tokens ----
+const R = 15;                 // planet radius
+const COL = {
+  sky:0x1a2244, ground:0x3b4a6e, crys1:0x7fe3d4, crys2:0xc9a7ff,
+  lantern:0xffd47f, line:0x12142e, rock:0x2c3860, path:0x263257
+};
+const FORTUNES = [
+  "迷いは月に預けて","夜明け前がいちばん暗い","小さな灯りを信じて",
+  "立ち止まる勇気も光になる","星は急がず、でも必ず巡る","今日の縁は静かに来る",
+  "振り返れば道は続いている","心の羅針盤を信じて","焦らず、星の速度で",
+  "見えない糸が導いている","そのため息も、星になる","明日の自分に灯をともして"
+];
+
+// ---- renderer / scene / camera ----
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x0d1330, 1);
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x141a3a, 0.010);   // 地平線用の薄い夜霧（空の遠景は fog:false で除外）
+
+const camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 0.1, 2000);
+camera.position.set(0, R+14, 26);
+
+// ---- toon gradient (3-step, min band kept bright for 夜間視認性) ----
+function gradientTex(){
+  const d = new Uint8Array([120,120,120, 190,190,190, 255,255,255]);
+  const t = new THREE.DataTexture(d, 3, 1, THREE.RGBFormat);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+  t.needsUpdate = true; return t;
+}
+const GRAD = gradientTex();
+function toon(color, emissive, eInt){
+  const m = new THREE.MeshToonMaterial({color, gradientMap:GRAD});
+  if(emissive!==undefined){ m.emissive = new TColor(emissive); m.emissiveIntensity = eInt||1; }
+  return m;
+}
+
+// ---- inverted-hull outline (濃紺) ----
+const outlineMat = new THREE.ShaderMaterial({
+  uniforms:{ oColor:{value:new TColor(COL.line)}, thick:{value:0.06} },
+  vertexShader:`uniform float thick; void main(){
+    vec3 p = position + normalize(normal)*thick;
+    gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
+  fragmentShader:`uniform vec3 oColor; void main(){ gl_FragColor=vec4(oColor,1.0);}`,
+  side:THREE.BackSide
+});
+function outline(mesh, thick){
+  const m = outlineMat.clone(); m.uniforms.thick.value = thick||0.06;
+  const o = new THREE.Mesh(mesh.geometry, m);
+  o.renderOrder = -1; mesh.add(o); return o;
+}
+// build a toon mesh + outline in one shot
+function cel(geo, color, thick, emissive, eInt){
+  const mesh = new THREE.Mesh(geo, toon(color, emissive, eInt));
+  outline(mesh, thick===undefined?0.05:thick);
+  return mesh;
+}
+
+// ---- additive glow halo sprite (Bloomの代替) ----
+const haloTex = (()=>{
+  const s=128, c=document.createElement('canvas'); c.width=c.height=s;
+  const g=c.getContext('2d'); const grd=g.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+  grd.addColorStop(0,'rgba(255,255,255,1)'); grd.addColorStop(.25,'rgba(255,255,255,.7)');
+  grd.addColorStop(.55,'rgba(255,255,255,.22)'); grd.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=grd; g.fillRect(0,0,s,s);
+  const t=new THREE.CanvasTexture(c); return t;
+})();
+let haloCount = 0;
+function halo(color, size){
+  haloCount++;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map:haloTex, color, blending:THREE.AdditiveBlending, transparent:true,
+    depthWrite:false, opacity:.9, fog:false }));   // 加算合成はフォグ非適用
+  sp.scale.setScalar(size||2);
+  return sp;
+}
+
+// ============================================================
+//  PLANET (static at origin) + terrain
+// ============================================================
+const planet = new THREE.Group(); scene.add(planet);
+const obstacles = [];   // 簡易衝突判定用（方向ベクトル＋角度閾値cos）
+
+const planetMesh = cel(new THREE.SphereGeometry(R, 48, 48), COL.ground, 0.18);
+planet.add(planetMesh);
+
+// place helper: put obj on sphere surface along dir (unit), raised by h
+const UP = V3(0,1,0);
+function placeOnSphere(obj, dir, h){
+  dir = dir.clone().normalize();
+  obj.position.copy(dir.clone().multiplyScalar(R + (h||0)));
+  obj.quaternion.setFromUnitVectors(UP, dir);
+  planet.add(obj);
+  obj.userData.dir = dir;
+  return obj;
+}
+function randDir(){
+  const u=Math.random(), v=Math.random();
+  const th=2*Math.PI*u, ph=Math.acos(2*v-1);
+  return V3(Math.sin(ph)*Math.cos(th), Math.cos(ph), Math.sin(ph)*Math.sin(th));
+}
+
+// -- craters (shallow rims) --
+for(let i=0;i<9;i++){
+  const cr = new THREE.Group();
+  const rim = cel(new THREE.TorusGeometry(1.1+Math.random()*0.8, 0.22, 8, 20), COL.rock, 0.04);
+  rim.rotation.x = Math.PI/2; rim.position.y = 0.02;
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(1.2,20), toon(0x222c50));
+  floor.rotation.x = -Math.PI/2; floor.position.y = -0.05;
+  cr.add(rim); cr.add(floor);
+  const s = 0.7+Math.random()*0.8; cr.scale.setScalar(s);
+  placeOnSphere(cr, randDir(), 0);
+}
+
+// -- glowing crystal clusters --
+const crystals = [];
+function crystalCluster(dir){
+  const g = new THREE.Group();
+  const n = 3+Math.floor(Math.random()*3);
+  for(let i=0;i<n;i++){
+    const c = (Math.random()<0.5)?COL.crys1:COL.crys2;
+    const h = 0.9+Math.random()*1.6;
+    const cr = cel(new THREE.ConeGeometry(0.28+Math.random()*0.18, h, 5), c, 0.04, c, 0.9);
+    cr.position.set((Math.random()-.5)*0.9, h/2, (Math.random()-.5)*0.9);
+    cr.rotation.z = (Math.random()-.5)*0.5; cr.rotation.x=(Math.random()-.5)*0.4;
+    g.add(cr);
+    if(haloCount<8){ const hl=halo(c,1.5); hl.position.copy(cr.position); hl.position.y=h*0.7; g.add(hl); }
+  }
+  placeOnSphere(g, dir, 0);
+  crystals.push(g);
+  obstacles.push({dir:dir.clone().normalize(), cos:Math.cos(0.085)});
+}
+for(let i=0;i<7;i++) crystalCluster(randDir());
+
+// -- cobblestone path (arc of stones between two points) --
+(function path(){
+  const a = V3(0,1,0.15).normalize(), b = V3(0.9,0.2,-0.4).normalize();
+  const steps=26;
+  for(let i=0;i<=steps;i++){
+    const t=i/steps;
+    const d = a.clone().multiplyScalar(1-t).add(b.clone().multiplyScalar(t)).normalize();
+    const st = cel(new THREE.CylinderGeometry(0.34,0.34,0.16,6), COL.path, 0.03);
+    st.rotation.y = Math.random()*Math.PI;
+    placeOnSphere(st, d, 0.02);
+    st.scale.set(1+Math.random()*.3,1,1+Math.random()*.3);
+  }
+})();
+
+// -- observatory (小さな天文台) --
+let telescope, telescopeGlow, observatoryDir = V3(0.25,0.9,0.3).normalize();
+(function observatory(){
+  const g = new THREE.Group();
+  const base = cel(new THREE.CylinderGeometry(1.5,1.8,1.1,16), 0x39456e, 0.05);
+  base.position.y=0.55; g.add(base);
+  const dome = cel(new THREE.SphereGeometry(1.5,18,12,0,Math.PI*2,0,Math.PI/2), 0x4a5688, 0.05);
+  dome.position.y=1.1; g.add(dome);
+  const slit = new THREE.Mesh(new THREE.BoxGeometry(0.4,1.5,1.6), toon(0x161d3d));
+  slit.position.set(0,1.5,0); g.add(slit);
+  // telescope
+  telescope = new THREE.Group();
+  const tube = cel(new THREE.CylinderGeometry(0.18,0.24,1.9,12), 0x9fb0e0, 0.03, COL.lantern, 0.0);
+  tube.rotation.z = Math.PI/2.6; tube.position.y=1.4;
+  telescope.add(tube);
+  telescopeGlow = halo(COL.lantern, 0); telescopeGlow.position.set(0.7,2.1,0);
+  telescope.add(telescopeGlow);
+  telescope.userData.tube = tube;
+  g.add(telescope);
+  placeOnSphere(g, observatoryDir, 0);
+  obstacles.push({dir:observatoryDir.clone(), cos:Math.cos(0.16)});
+})();
+
+// ============================================================
+//  STAR SHARDS (collectibles ×7)
+// ============================================================
+const shards = []; let collected = 0;
+function makeShard(dir){
+  const g = new THREE.Group();
+  const core = cel(new THREE.OctahedronGeometry(0.5,0), COL.lantern, 0.05, COL.lantern, 1.1);
+  core.material.transparent = true;   // 回収時のフェード演出を効かせる
+  g.add(core);
+  const hl = halo(COL.lantern, 2.2); g.add(hl);
+  placeOnSphere(g, dir, 2.2);      // float above surface
+  g.userData.core = core; g.userData.baseDir = dir.clone().normalize();
+  g.userData.phase = Math.random()*Math.PI*2; g.userData.alive = true;
+  shards.push(g);
+}
+// spread 7 shards around the sphere
+const shardDirs = [
+  V3(1,0.2,0.2), V3(-0.8,0.3,0.6), V3(0.3,-0.7,0.6), V3(-0.4,-0.5,-0.8),
+  V3(0.7,0.5,-0.6), V3(-0.9,-0.1,-0.3), V3(0.1,0.95,-0.2)
+];
+shardDirs.forEach(d=>makeShard(d));
+
+// ============================================================
+//  SKY : starfield (Points) + shooting stars + constellation
+// ============================================================
+(function starfield(){
+  const N=1800, pos=new Float32Array(N*3), col=new Float32Array(N*3);
+  const cA=new TColor(0xffffff), cB=new TColor(0xc9a7ff), cC=new TColor(0x7fe3d4);
+  for(let i=0;i<N;i++){
+    const d=randDir().multiplyScalar(120+Math.random()*140);
+    pos[i*3]=d.x; pos[i*3+1]=d.y; pos[i*3+2]=d.z;
+    const c=[cA,cA,cA,cB,cC][Math.floor(Math.random()*5)];
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const mat=new THREE.PointsMaterial({size:1.1,sizeAttenuation:true,vertexColors:true,
+    transparent:true,opacity:.9,depthWrite:false,fog:false});  // フォグで遠景の星が消えないように
+  scene.add(new THREE.Points(geo,mat));
+})();
+
+// gradient skydome (深い紺→藍)
+(function skydome(){
+  const geo=new THREE.SphereGeometry(900,32,16);
+  const mat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
+    uniforms:{top:{value:new TColor(0x0e1430)},bot:{value:new TColor(0x24306a)}},
+    vertexShader:`varying vec3 vp; void main(){vp=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+    fragmentShader:`varying vec3 vp; uniform vec3 top; uniform vec3 bot;
+      void main(){ float h=normalize(vp).y*0.5+0.5; gl_FragColor=vec4(mix(bot,top,h),1.0);}`});
+  scene.add(new THREE.Mesh(geo,mat));
+})();
+
+// shooting stars
+const shooters=[]; let nextShoot=2+Math.random()*3;
+function spawnShooter(){
+  const start=randDir().multiplyScalar(200); start.y=Math.abs(start.y)*0.6+60;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:haloTex,color:0xffffff,
+    blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:0,fog:false}));
+  sp.position.copy(start);
+  const dir=V3(-1,-0.3,(Math.random()-.5)).normalize();
+  sp.userData={dir,life:0,max:1.1+Math.random()*0.6,speed:180+Math.random()*80};
+  scene.add(sp); shooters.push(sp);
+}
+
+// constellation (drawn on clear)
+let constellation=null;
+function buildConstellation(){
+  // stylized "crown / star-path" nodes on the celestial sphere, facing observatory side
+  const base=observatoryDir.clone().multiplyScalar(140).add(V3(0,60,0));
+  const nodes=[V3(-26,8,0),V3(-14,20,4),V3(-4,6,-2),V3(6,24,3),V3(16,4,-4),
+    V3(26,22,2),V3(2,-10,0),V3(-14,20,4)]; // last repeats to close a loop-ish
+  const pts=nodes.map(n=>base.clone().add(n));
+  const seg=[];
+  for(let i=0;i<pts.length-1;i++){ seg.push(pts[i],pts[i+1]); }
+  const g=new THREE.BufferGeometry().setFromPoints(seg);
+  const m=new THREE.LineBasicMaterial({color:0xc9a7ff,transparent:true,opacity:0,fog:false});
+  constellation=new THREE.LineSegments(g,m);
+  scene.add(constellation);
+  // node glows
+  pts.forEach(p=>{ const h=halo(0xd9c6ff,6); h.position.copy(p); h.material.opacity=0;
+    constellation.add(h); h.userData.node=true; });
+}
+
+// ============================================================
+//  LIGHTING (夜・3灯構成) — 最重要：暗所視認性を守る
+// ============================================================
+const moon = new THREE.DirectionalLight(0x9fb6ff, 0.85);   // ①月光（青白・弱め）
+moon.position.set(40,60,20); scene.add(moon);
+const hemi = new THREE.HemisphereLight(0x3a4a86, 0x1a2244, 0.75); // ②照り返し
+scene.add(hemi);
+const amb = new THREE.AmbientLight(0x2a3566, 0.35);        // ベースの底上げ
+scene.add(amb);
+// ③ランタンPointLight → 後でキャラに装着
+
+// ============================================================
+//  TRAVELER (旅人) — pivot rotation method で球面歩行
+// ============================================================
+const pivot = new THREE.Object3D(); scene.add(pivot);   // 惑星中心リグ
+const traveler = new THREE.Group(); traveler.position.set(0, R, 0);
+pivot.add(traveler);
+
+// build model (feet at y=0, grows upward)
+const legs=[];
+(function buildTraveler(){
+  const cloakCol=0x36407a, hatCol=0x232a54, skinCol=0xe8d8c0;
+  // cloak / mantle (cone body)
+  const cloak = cel(new THREE.ConeGeometry(0.62,1.5,10), cloakCol, 0.04);
+  cloak.position.y=0.85; traveler.add(cloak);
+  // shoulders cape
+  const cape = cel(new THREE.SphereGeometry(0.5,12,8,0,Math.PI*2,0,Math.PI/2), 0x2c356b, 0.04);
+  cape.position.y=1.45; cape.scale.set(1.05,0.7,1.1); traveler.add(cape);
+  // head
+  const head = cel(new THREE.SphereGeometry(0.34,14,12), skinCol, 0.035);
+  head.position.y=1.75; traveler.add(head);
+  // hat (brim + cone)
+  const brim = cel(new THREE.CylinderGeometry(0.55,0.55,0.08,14), hatCol, 0.035);
+  brim.position.y=1.98; traveler.add(brim);
+  const cap = cel(new THREE.ConeGeometry(0.4,0.75,12), hatCol, 0.035);
+  cap.position.y=2.35; cap.rotation.z=0.12; traveler.add(cap);
+  // 正面がわかるように：目（前=-Z）＋マフラー襟＋なびく尾
+  const eyeG=new THREE.SphereGeometry(0.055,8,8);
+  const eyeMat=toon(0xfff3d6, COL.lantern, 0.7);
+  for(let s=-1;s<=1;s+=2){ const e=new THREE.Mesh(eyeG,eyeMat); e.position.set(0.12*s,1.78,-0.29); traveler.add(e); }
+  const collar = cel(new THREE.TorusGeometry(0.3,0.09,8,16), COL.crys1, 0.03, 0x214f49, 0.35);
+  collar.position.y=1.52; collar.rotation.x=Math.PI/2; traveler.add(collar);
+  const tail = cel(new THREE.BoxGeometry(0.16,0.6,0.1), COL.crys1, 0.03, 0x214f49, 0.3);
+  tail.position.set(0.1,1.35,0.26); tail.rotation.x=-0.5; traveler.add(tail);
+  traveler.userData.tail = tail;
+  // legs (swing for walk)
+  for(let s=-1;s<=1;s+=2){
+    const leg = cel(new THREE.CylinderGeometry(0.13,0.11,0.7,8), 0x222a52, 0.03);
+    const pivotL=new THREE.Group(); pivotL.position.set(0.2*s,0.5,0);
+    leg.position.y=-0.35; pivotL.add(leg); traveler.add(pivotL); legs.push(pivotL);
+  }
+  // lantern arm + lantern (ランタン：常時発光)
+  const arm = cel(new THREE.CylinderGeometry(0.07,0.07,0.55,6), 0x2c356b, 0.03);
+  arm.position.set(0.5,1.2,0.15); arm.rotation.z=-0.5; traveler.add(arm);
+  const lantern = cel(new THREE.BoxGeometry(0.34,0.44,0.34), 0xfff0c8, 0.035, COL.lantern, 1.4);
+  lantern.position.set(0.72,0.95,0.2); traveler.add(lantern);
+  const cap2 = cel(new THREE.ConeGeometry(0.24,0.2,4), hatCol, 0.03);
+  cap2.position.set(0.72,1.22,0.2); cap2.rotation.y=Math.PI/4; traveler.add(cap2);
+  // lantern light + halo
+  const lp = new THREE.PointLight(COL.lantern, 1.7, 13, 2);
+  lp.position.set(0.72,0.95,0.2); traveler.add(lp);
+  traveler.userData.lp = lp;
+  const hl = halo(COL.lantern, 2.6); hl.position.set(0.72,0.95,0.2); traveler.add(hl);
+  traveler.userData.lanternHalo = hl;
+})();
+
+// ============================================================
+//  MOVEMENT (球面歩行) + CAMERA (三人称lerp追従)
+// ============================================================
+const keys={};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+
+// virtual stick
+let stickVec={x:0,y:0}, stickActive=false;
+const stickEl=document.getElementById('stick'), knob=stickEl.querySelector('.knob');
+function stickStart(e){stickActive=true; stickMove(e);}
+function stickMove(e){
+  if(!stickActive)return;
+  const t=e.touches?e.touches[0]:e; const r=stickEl.getBoundingClientRect();
+  let dx=t.clientX-(r.left+r.width/2), dy=t.clientY-(r.top+r.height/2);
+  const max=r.width/2, len=Math.hypot(dx,dy);
+  if(len>max){dx*=max/len;dy*=max/len;}
+  knob.style.transform=`translate(${dx}px,${dy}px)`;
+  stickVec.x=dx/max; stickVec.y=dy/max;
+}
+function stickEnd(){stickActive=false; stickVec={x:0,y:0}; knob.style.transform='translate(0,0)';}
+stickEl.addEventListener('touchstart',stickStart,{passive:true});
+stickEl.addEventListener('touchmove',stickMove,{passive:true});
+stickEl.addEventListener('touchend',stickEnd);
+stickEl.addEventListener('mousedown',stickStart);
+addEventListener('mousemove',stickMove); addEventListener('mouseup',stickEnd);
+
+const MOVE=1.15, TURN=1.6;  // rad/sec
+const camUp=V3(0,1,0), lookAt=V3(0,R,0);
+let walkPhase=0, started=false;
+// --- reusable scratch (毎フレームのGC割り当てを避ける) ---
+const AX_X=V3(1,0,0), AX_Y=V3(0,1,0);
+const _q=new THREE.Quaternion(), _qSave=new THREE.Quaternion();
+const _cp=new THREE.Vector3(), _up=new THREE.Vector3(), _fw=new THREE.Vector3();
+const _desired=new THREE.Vector3(), _look=new THREE.Vector3(), _sv=new THREE.Vector3();
+const _dir=new THREE.Vector3();
+
+function update(dt){
+  // input → forward / turn
+  let fwd=0, turn=0;
+  if(keys['w']||keys['arrowup']) fwd+=1;
+  if(keys['s']||keys['arrowdown']) fwd-=1;
+  if(keys['a']||keys['arrowleft']) turn+=1;
+  if(keys['d']||keys['arrowright']) turn-=1;
+  if(Math.abs(stickVec.x)>0.05||Math.abs(stickVec.y)>0.05){
+    fwd += -stickVec.y; turn += -stickVec.x;
+  }
+  fwd=Math.max(-1,Math.min(1,fwd)); turn=Math.max(-1,Math.min(1,turn));
+
+  const moving=Math.abs(fwd)>0.02;
+  // turn about local up (Y), move about local right (X)
+  if(turn!==0){
+    _q.setFromAxisAngle(AX_Y, turn*TURN*dt);
+    pivot.quaternion.multiply(_q);
+  }
+  if(fwd!==0){
+    _qSave.copy(pivot.quaternion);
+    _q.setFromAxisAngle(AX_X, -fwd*MOVE*dt);
+    pivot.quaternion.multiply(_q);
+    // 簡易衝突：進行後のキャラ方向が障害物の角度閾値内なら前進を取り消す（旋回は許可）
+    _dir.set(0,1,0).applyQuaternion(pivot.quaternion);
+    for(let i=0;i<obstacles.length;i++){
+      if(_dir.dot(obstacles[i].dir) > obstacles[i].cos){ pivot.quaternion.copy(_qSave); break; }
+    }
+  }
+
+  // walk animation
+  if(moving){
+    walkPhase += dt*9;
+    legs[0].rotation.x=Math.sin(walkPhase)*0.5;
+    legs[1].rotation.x=-Math.sin(walkPhase)*0.5;
+    traveler.position.y = R + Math.abs(Math.sin(walkPhase))*0.06;
+    if(traveler.userData.tail) traveler.userData.tail.rotation.z=Math.sin(walkPhase)*0.35;
+  } else {
+    const damp = Math.pow(0.85, dt*60);   // フレームレート非依存の減衰
+    walkPhase*=damp;
+    legs[0].rotation.x*=damp; legs[1].rotation.x*=damp;
+    traveler.position.y = R;
+    if(traveler.userData.tail) traveler.userData.tail.rotation.z*=damp;
+  }
+
+  // ---- camera : lerp position / up / look ----
+  traveler.getWorldPosition(_cp);
+  _up.copy(_cp).normalize();
+  _fw.set(0,0,-1).applyQuaternion(pivot.quaternion).normalize();
+  _desired.copy(_cp).addScaledVector(_fw,-9).addScaledVector(_up,5.2);
+  camera.position.lerp(_desired, 1-Math.pow(0.001,dt));
+  camUp.lerp(_up, 1-Math.pow(0.0005,dt)).normalize(); camera.up.copy(camUp);
+  _look.copy(_cp).addScaledVector(_up,1.6);
+  lookAt.lerp(_look, 1-Math.pow(0.0008,dt));
+  camera.lookAt(lookAt);
+
+  // ---- shards : bob / spin / collect ----  (_cp = traveler world pos)
+  shards.forEach(s=>{
+    if(!s.userData.alive)return;
+    s.userData.phase+=dt*2;
+    const bob=Math.sin(s.userData.phase)*0.25;
+    s.position.copy(_sv.copy(s.userData.baseDir).multiplyScalar(R+2.2+bob));
+    s.userData.core.rotation.y+=dt*1.5; s.userData.core.rotation.x+=dt*0.8;
+    if(s.position.distanceTo(_cp)<2.6) collect(s);
+  });
+
+  // crystals gentle pulse
+  const pulse=0.7+Math.sin(performance.now()*0.001)*0.25;
+  crystals.forEach(g=>g.children.forEach(ch=>{ if(ch.material&&ch.material.emissiveIntensity!==undefined) ch.material.emissiveIntensity=pulse; }));
+
+  // lantern flicker
+  const lp=traveler.userData.lp;
+  lp.intensity = 1.6 + Math.sin(performance.now()*0.006)*0.18 + Math.random()*0.05;
+  traveler.userData.lanternHalo.scale.setScalar(2.5+Math.sin(performance.now()*0.005)*0.15);
+
+  // shooting stars
+  nextShoot-=dt; if(nextShoot<=0){ spawnShooter(); nextShoot=3+Math.random()*4; }
+  for(let i=shooters.length-1;i>=0;i--){
+    const s=shooters[i]; s.userData.life+=dt;
+    s.position.addScaledVector(s.userData.dir, s.userData.speed*dt);
+    const l=s.userData.life/s.userData.max;
+    s.material.opacity=Math.sin(Math.min(l,1)*Math.PI)*0.9;
+    s.scale.set(8,1.4,1);
+    if(l>=1){ scene.remove(s); shooters.splice(i,1); }
+  }
+
+  // clear sequence anim
+  if(clearing){
+    clearT+=dt;
+    telescopeGlow.scale.setScalar(Math.min(clearT*3,6));
+    telescope.userData.tube.material.emissiveIntensity=Math.min(clearT*1.2,1.4);
+    if(constellation){
+      constellation.material.opacity=Math.min(clearT*0.4,0.9);
+      constellation.children.forEach(h=>{ if(h.userData.node) h.material.opacity=Math.min(clearT*0.4,0.85); });
+    }
+  }
+}
+
+// ============================================================
+//  COLLECT + FORTUNE CARD + CLEAR
+// ============================================================
+const cardEl=document.getElementById('card'), msgEl=cardEl.querySelector('.msg');
+const progEl=document.getElementById('progress');
+let cardTimer=null;
+function refreshProgress(){
+  let html='';
+  for(let i=0;i<7;i++) html+=`<span class="star${i<collected?' on':''}"></span>`;
+  html+=`<span class="cnt">☆ ${collected} / 7</span>`;
+  progEl.innerHTML=html;
+}
+refreshProgress();
+
+function showCard(text){
+  msgEl.textConte
