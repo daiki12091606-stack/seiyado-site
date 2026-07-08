@@ -152,7 +152,9 @@
   body.started #recBtn{display:block;}
   #recBtn:hover{opacity:.8;}
   body.recording #recBtn,
-  body.recording #hud > *:not(#brand):not(#card){ display:none !important; }
+  body.recording #progress,
+  body.recording #hud > *:not(#brand){ display:none !important; }
+  body.recording #brand .title small{ display:none; }   /* 左上ロゴのみ残す */
 
   /* エンドカード（金線フレーム・サムネ用） */
   #cinemaText{
@@ -1380,7 +1382,22 @@ document.getElementById('startBtn').addEventListener('click',begin);
 startEl.addEventListener('touchstart',begin,{passive:true});
 
 // expose for debug
-window.__seiya={scene,camera,pivot,shards,visit,collect:()=>shards.forEach(s=>visit(s))};
+// 検証用：シネマの任意秒へジャンプして1フレーム描画（背景タブ・撮影QA向け）
+function _cineSeek(t,vert){
+  if(!cinemaActive) startCinema();
+  cinemaVert=!!vert; document.body.classList.toggle('vertical',cinemaVert);
+  cinemaT=t;
+  cinCapsStep();
+  cinemaStarShot = t>=16.0;
+  if(t>=21.5){ if(!constellation) buildConstellation();
+    if(constellation){ const o=Math.min((t-21.5)*0.55,0.9); constellation.material.opacity=o;
+      constellation.children.forEach(h=>{ if(h.userData.node) h.material.opacity=Math.min(o,0.85);}); } }
+  if(t>=22.0) cinemaTextEl.classList.add('show'); else cinemaTextEl.classList.remove('show');
+  updateCinemaCamera(0.016);
+  renderer.render(scene,camera);
+}
+window.__seiya={scene,camera,pivot,shards,visit,collect:()=>shards.forEach(s=>visit(s)),
+  startCinema,stopCinema,cineSeek:_cineSeek};
 })();
 </script>
 </body>
