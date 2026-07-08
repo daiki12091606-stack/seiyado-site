@@ -47,7 +47,10 @@
     border:1px solid rgba(255,212,127,.5);border-radius:16px 0 0 16px;
     box-shadow:0 18px 50px rgba(0,0,0,.55), inset 0 0 26px rgba(127,227,212,.05);
     transition:transform .55s cubic-bezier(.22,.9,.3,1),opacity .4s;opacity:0;
-    backdrop-filter:blur(6px);pointer-events:none;touch-action:pan-y;}
+    backdrop-filter:blur(6px);pointer-events:none;touch-action:pan-y;
+    max-height:84vh;overflow-y:auto;overscroll-behavior:contain;}
+  #card::-webkit-scrollbar{width:6px;}
+  #card::-webkit-scrollbar-thumb{background:rgba(255,212,127,.25);border-radius:3px;}
   #card::before{content:"";position:absolute;inset:5px;border:1px solid rgba(255,212,127,.22);
     border-radius:12px 0 0 12px;pointer-events:none;}
   #card.show{opacity:1;transform:translate(0,-50%);pointer-events:auto;}
@@ -67,8 +70,19 @@
   #card.show .constel circle:nth-of-type(6){animation-delay:.7s;}
   @keyframes constelDraw{to{stroke-dashoffset:0;}}
   @keyframes starTwinkle{from{opacity:.2;}to{opacity:1;}}
-  #card .msg{font-size:14px;line-height:1.9;letter-spacing:.04em;text-align:left;
+  #card .msg{font-size:13.5px;line-height:1.9;letter-spacing:.04em;text-align:left;
     color:var(--ink);font-weight:500;}
+  #card .sec{margin-top:13px;text-align:left;}
+  #card .sh{font-family:"Hiragino Mincho ProN","Yu Mincho","MS PMincho",serif;
+    font-size:11px;letter-spacing:.28em;color:var(--lantern);margin-bottom:7px;}
+  #card .tags{display:flex;flex-wrap:wrap;gap:5px;}
+  #card .tag{font-size:11px;line-height:1.5;padding:4px 9px;border-radius:999px;
+    border:1px solid rgba(127,227,212,.35);background:rgba(127,227,212,.07);color:var(--ink);}
+  #card .tag small{color:var(--crys1);margin-left:4px;font-size:10px;}
+  #card .pt{margin-top:13px;text-align:left;font-size:12.5px;line-height:1.85;
+    color:var(--ink);opacity:.92;}
+  #card .meta{margin-top:13px;font-size:11px;letter-spacing:.06em;color:var(--lantern);
+    border-top:1px solid rgba(255,212,127,.2);padding-top:10px;}
   #card .go{display:block;margin-top:16px;padding:12px 0;border-radius:999px;text-align:center;
     border:1px solid rgba(255,212,127,.65);color:var(--lantern);text-decoration:none;
     font-size:13px;letter-spacing:.12em;background:rgba(255,212,127,.08);transition:.3s;}
@@ -77,7 +91,7 @@
   /* スマホ・狭い画面：ボトムシート（スティックと反対の右下） */
   @media (hover:none), (max-width:560px){
     #card{top:auto;left:auto;right:8px;bottom:calc(10px + env(safe-area-inset-bottom,0));
-      width:min(76vw,340px);max-height:44vh;overflow-y:auto;
+      width:min(76vw,340px);max-height:56vh;overflow-y:auto;
       transform:translate(0,135%);border-radius:16px;}
     #card::before{border-radius:12px;}
     #card.show{transform:translate(0,0);}
@@ -147,6 +161,9 @@
       </g>
     </svg>
     <div class="msg">—</div>
+    <div class="sec"><div class="sh">タ イ プ 一 覧</div><div class="tags"></div></div>
+    <div class="pt">—</div>
+    <div class="meta">—</div>
     <a class="go" href="https://hoshiyorudou.com/" target="_blank" rel="noopener">くわしく見る →</a>
     <div class="close">と じ る</div>
   </div>
@@ -191,13 +208,55 @@ const COL = {
 };
 // 星夜堂（hoshiyorudou.com）のコンテンツ案内 — 7つの情報スポット
 const SPOTS = [
-  {icon:"cat",      label:"猫 種 診 断", desc:"全8タイプ・20問。アメショ、ベンガル、ラグドール、ペルシャほか。あなたにぴったりの猫種を診断します。", url:"https://hoshiyorudou.com/neko_v2.html"},
-  {icon:"dog",      label:"犬 種 診 断", desc:"全16タイプ・20問。柴犬、ゴールデン、ハスキー、ポメラニアンほか。直感で選ぶだけ、約3分。", url:"https://hoshiyorudou.com/inu_v2.html"},
-  {icon:"paw",      label:"動 物 診 断", desc:"全7タイプ・20問。獅子、狼、鷹、狐ほか。あなたの中に棲む動物はどれ？", url:"https://hoshiyorudou.com/dobutsu_v2.html"},
-  {icon:"star8",    label:"神 獣 診 断", desc:"全6タイプ・20問。白虎、青龍、鳳凰、麒麟ほか。あなたを守る神獣を診断します。", url:"https://hoshiyorudou.com/shinjuu_v2.html"},
-  {icon:"spiral",   label:"守 護 龍 診 断", desc:"全6タイプ・20問。金龍、炎龍、月龍、桜龍、嵐龍、大地龍。あなたの守護龍は？", url:"https://hoshiyorudou.com/shugoryu_v2.html"},
-  {icon:"astro",    label:"6 つ の 占 術", desc:"四柱推命・算命学・紫微斗数・九星気学 × 西洋占星術・数秘術。東洋×西洋の全方位分析で運勢の精度を高めます。", url:"https://hoshiyorudou.com/uranai.html"},
-  {icon:"envelope", label:"LINE で 毎 日 運 勢", desc:"性格診断×6つの占術×過去12年の運気周期を照合し、あなただけの運勢を毎日LINEでお届けします（無料）。", url:"https://lin.ee/hoshiyorudou"}
+  {icon:"cat", label:"猫 種 診 断",
+   desc:"あなたの性格に似た猫種はどれ？ 自立心・甘え方・好奇心・人との距離感など多角的な観点から、あなたに最も近い一匹を導き出す無料診断です。",
+   sec:"全 8 タ イ プ",
+   tags:[["アメショ","社交派"],["ペルシャ","マイペース"],["マンチカン","愛され系"],["スコティッシュ","ツンデレ"],["シャム","知性派"],["ノルウェジアン","独立系"],["ラグドール","癒し系"],["ベンガル","野生的"]],
+   point:"結果ページではタイプの特徴・長所・相性までくわしく解説。SNSやLINEでシェアして、友だちとタイプを比べて楽しめます。",
+   meta:"全20問 ・ 約2〜3分 ・ 無料 ・ 登録不要", cta:"猫種診断をやってみる",
+   url:"https://hoshiyorudou.com/neko_v2.html"},
+  {icon:"dog", label:"犬 種 診 断",
+   desc:"社交性・知性・行動スタイル・感情表現の4軸×20問で、あなたの性格に最も近い犬種を全16種から判定します。",
+   sec:"全 16 犬 種（一部）",
+   tags:[["ボーダーコリー","孤高の戦略犬"],["ゴールデン","みんなのリーダー"],["柴犬","独自の美学"],["ハスキー","自立した職人"],["ドーベルマン","生まれながらのリーダー"],["ポメラニアン","太陽犬"],["秋田犬","孤高の思索犬"],["ラブラドール","みんなの友達"]],
+   point:"分析・論理派／共感・創造派／誠実・堅実派／行動・感覚派の4系統・全16犬種。結果では得意なこと・向いている職業・相性の良い犬種まで分かります。",
+   meta:"全20問 ・ 約2〜3分 ・ 無料 ・ 登録不要", cta:"犬種診断をやってみる",
+   url:"https://hoshiyorudou.com/inu_v2.html"},
+  {icon:"paw", label:"動 物 診 断",
+   desc:"あなたの魂に宿る動物は何？ リーダーシップの取り方・困難への向き合い方・人間関係のスタイルから、内に棲む一頭を映し出します。",
+   sec:"全 7 タ イ プ",
+   tags:[["獅子","王者の風格"],["狼","孤高の知恵"],["鷹","鋭い眼力"],["熊","大地の守護"],["狐","神秘の知恵"],["馬","自由と疾走"],["亀","不屈の忍耐"]],
+   point:"7タイプはそれぞれ統率力・知略・先見性・包容力・機知・行動力・忍耐の象徴。結果ページでは他タイプとの相性も解説します。",
+   meta:"全20問 ・ 約2〜3分 ・ 無料 ・ 登録不要", cta:"動物診断をやってみる",
+   url:"https://hoshiyorudou.com/dobutsu_v2.html"},
+  {icon:"star8", label:"神 獣 診 断",
+   desc:"東洋の伝説に伝わる神獣で、あなたの気質を象徴的に映し出す診断。意志の強さ・知性・感性・人との関わり方から読み解きます。",
+   sec:"全 6 タ イ プ",
+   tags:[["白虎","勇気と純粋さ"],["青龍","知恵と成長"],["朱雀","情熱と再生"],["玄武","忍耐と守護"],["麒麟","高貴と平和"],["鳳凰","変革と不死"]],
+   point:"四神（白虎・青龍・朱雀・玄武）に麒麟・鳳凰を加えた6柱。あなたのタイプの特徴・長所・相性を結果ページで解説します。",
+   meta:"全20問 ・ 約2〜3分 ・ 無料 ・ 登録不要", cta:"神獣診断をやってみる",
+   url:"https://hoshiyorudou.com/shinjuu_v2.html"},
+  {icon:"spiral", label:"守 護 龍 診 断",
+   desc:"あなたに寄り添い守護する一体の龍を、意志・情熱・優しさ・変化への適応力から導き出す診断です。",
+   sec:"全 6 タ イ プ",
+   tags:[["金龍","繁栄と成功"],["炎龍","情熱と突破"],["桜龍","縁と調和"],["嵐龍","変革と突破"],["月龍","直感と神秘"],["大地龍","安定と守護"]],
+   point:"龍はそれぞれ異なる力の象徴。あなたの内面を映す守護龍の特徴・長所・他の龍との相性が結果ページで分かります。",
+   meta:"全20問 ・ 約2〜3分 ・ 無料 ・ 登録不要", cta:"守護龍診断をやってみる",
+   url:"https://hoshiyorudou.com/shugoryu_v2.html"},
+  {icon:"astro", label:"6 つ の 占 術",
+   desc:"中国・メソポタミア・ギリシャ——互いに影響を受けていない古代文明が育てた6つの占術を組み合わせ、一つの世界観に偏らない多角分析を行います。",
+   sec:"占 術 と 得 意 分 野",
+   tags:[["四柱推命","金運・人生の流れ"],["算命学","仕事運・天中殺"],["西洋占星術","恋愛・対人"],["数秘術","使命・才能"],["紫微斗数","健康運"],["九星気学","年運・時代の流れ"]],
+   point:"異なるデータ（生年月日・時刻・出生地・方位）を使う複数の視点が同じ方向を示すとき、精度は格段に高まる——それが星夜堂のアプローチです。",
+   meta:"歴史1000〜3000年の6占術 ・ 解説ページ無料", cta:"各占術の詳細を見る",
+   url:"https://hoshiyorudou.com/uranai.html"},
+  {icon:"envelope", label:"LINE で 毎 日 運 勢",
+   desc:"生年月日を登録するだけで、6つの占術から算出したあなた専用の運勢が毎日LINEに届きます。星夜堂の本命サービスです。",
+   sec:"配 信 の 特 徴",
+   tags:[["毎日配信","あなた専用"],["6占術統合","多角分析"],["12年周期照合","過去の運気と照合"],["性格タイプ連動","診断結果を反映"],["無料","登録のみ"]],
+   point:"性格診断を受けてから登録すると、あなたの価値観・思考パターンを踏まえた、よりパーソナライズ度の高い運勢になります。",
+   meta:"友だち追加 無料 ・ いつでも解除OK", cta:"友だち追加する",
+   url:"https://lin.ee/hoshiyorudou"}
 ];
 
 // ---- renderer / scene / camera ----
@@ -842,11 +901,19 @@ function refreshProgress(){
 refreshProgress();
 
 const lblEl=cardEl.querySelector('.lbl'), iconEl=cardEl.querySelector('.icon'), goEl=cardEl.querySelector('.go');
+const shEl=cardEl.querySelector('.sh'), tagsEl=cardEl.querySelector('.tags'),
+      ptEl=cardEl.querySelector('.pt'), metaEl=cardEl.querySelector('.meta');
 cardEl.querySelector('.close').addEventListener('click',()=>{cardEl.classList.remove('show'); camFocus=null;});
 document.querySelector('#clear .cls').addEventListener('click',()=>document.getElementById('clear').classList.remove('show'));
 function showSpot(spot){
   iconEl.src=iconURL(spot.icon); lblEl.textContent=spot.label;
-  msgEl.textContent=spot.desc; goEl.href=spot.url;
+  msgEl.textContent=spot.desc;
+  shEl.textContent=spot.sec;
+  tagsEl.innerHTML=spot.tags.map(t=>`<span class="tag">${t[0]}<small>${t[1]}</small></span>`).join('');
+  ptEl.textContent=spot.point;
+  metaEl.textContent=spot.meta;
+  goEl.href=spot.url; goEl.textContent=spot.cta+" →";
+  cardEl.scrollTop=0;
   cardEl.classList.add('show');
   clearTimeout(cardTimer);
   cardTimer=setTimeout(()=>{cardEl.classList.remove('show'); camFocus=null;}, 15000);
