@@ -139,6 +139,58 @@
     text-align:center;font-size:11px;letter-spacing:.16em;opacity:.5;}
   @media (hover:none){ #hint .kbd{display:none;} }
   @media (hover:hover){ #hint .touch{display:none;} }
+
+
+  /* ── Cinema Mode ─────────────────────────────── */
+  #recBtn{
+    position:fixed;bottom:24px;right:20px;z-index:30;
+    padding:9px 16px;border-radius:24px;cursor:pointer;
+    background:rgba(26,34,68,.72);border:1.5px solid #ffd47f;
+    color:#ffd47f;font-size:13px;letter-spacing:.14em;font-family:inherit;
+    backdrop-filter:blur(6px);transition:opacity .3s;display:none;
+  }
+  body.started #recBtn{display:block;}
+  #recBtn:hover{opacity:.8;}
+  body.recording #recBtn,
+  body.recording #hud > *:not(#brand):not(#card){ display:none !important; }
+
+  /* エンドカード（金線フレーム・サムネ用） */
+  #cinemaText{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:min(78vw,400px);padding:38px 28px;border-radius:18px;
+    text-align:center;z-index:25;pointer-events:none;
+    background:linear-gradient(168deg,rgba(31,38,74,.94),rgba(18,20,46,.96));
+    border:1px solid rgba(255,212,127,.6);box-shadow:0 24px 60px rgba(0,0,0,.6);
+    opacity:0;transition:opacity 1.2s;
+  }
+  #cinemaText::before{content:"";position:absolute;inset:6px;
+    border:1px solid rgba(255,212,127,.25);border-radius:13px;}
+  #cinemaText.show{ opacity:1; }
+  #cinemaText .main{font-family:"Hiragino Mincho ProN","Yu Mincho","MS PMincho",serif;
+    font-size:clamp(26px,6vw,38px);letter-spacing:.3em;
+    color:#ffd47f;text-shadow:0 0 24px rgba(255,212,127,.6);}
+  #cinemaText .sub{font-size:clamp(13px,3.4vw,17px);letter-spacing:.2em;
+    color:#e8ecff;opacity:.9;margin-top:16px;}
+  #cinemaText .prof{font-size:clamp(11px,3vw,14px);letter-spacing:.22em;
+    color:#7fe3d4;margin-top:10px;}
+
+  /* 撮影用字幕（明朝・白文字＋紺の縁取り） */
+  #cap{
+    position:fixed;top:14%;left:50%;transform:translateX(-50%);z-index:26;
+    font-family:"Hiragino Mincho ProN","Yu Mincho","MS PMincho",serif;
+    font-size:clamp(20px,3.2vw,34px);letter-spacing:.12em;color:#fff;
+    text-align:center;white-space:nowrap;pointer-events:none;
+    opacity:0;transition:opacity .6s;
+    text-shadow:0 0 16px rgba(18,20,46,.95),0 2px 6px rgba(18,20,46,.9),0 0 3px rgba(18,20,46,1);
+  }
+  #cap.show{opacity:1;}
+
+  /* 9:16 vertical mode（#vertical ハッシュ → リールズ/TikTok/Shorts用）
+     字幕・被写体を中央セーフエリアへ、下1/3を避ける */
+  body.vertical canvas{margin:0 auto;}
+  body.vertical #cap{top:20%;white-space:normal;max-width:84vw;
+    font-size:clamp(18px,5.6vw,28px);line-height:1.8;}
+  body.vertical #cinemaText{width:min(84vw,340px);top:44%;}
 </style>
 </head>
 <body>
@@ -187,6 +239,14 @@
     <p>小さな星のうえを歩き、夜空にともる<br>七つの「星の灯」をめぐりましょう。<br>近づくたび、星夜堂の診断や占いの案内が受け取れます。</p>
     <div class="btn" id="startBtn">は じ め る</div>
   </div>
+</div>
+
+<button id="recBtn">● 録画再生</button>
+<div id="cap"></div>
+<div id="cinemaText">
+  <div class="main">星 夜 堂</div>
+  <div class="sub">LINEで毎日の運勢を</div>
+  <div class="prof">リンクは プロフィールへ</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -261,16 +321,26 @@ const SPOTS = [
 
 // ---- renderer / scene / camera ----
 const app = document.getElementById('app');
+// #vertical ハッシュ → 9:16縦向きモード（リールズ/TikTok/Shorts撮影用）
+if(location.hash==='#vertical') document.body.classList.add('vertical');
+function viewSize(){
+  if(document.body.classList.contains('vertical')){
+    const h=innerHeight, w=Math.min(innerWidth, Math.round(h*9/16));
+    return [w,h];
+  }
+  return [innerWidth, innerHeight];
+}
 const renderer = new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-renderer.setSize(innerWidth, innerHeight);
+const _vs0=viewSize();
+renderer.setSize(_vs0[0], _vs0[1]);
 renderer.setClearColor(0x0d1330, 1);
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x141a3a, 0.010);   // 地平線用の薄い夜霧（空の遠景は fog:false で除外）
 
-const camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 0.1, 2000);
+const camera = new THREE.PerspectiveCamera(58, _vs0[0]/_vs0[1], 0.1, 2000);
 camera.position.set(0, R+14, 26);
 
 // ---- toon gradient (3-step, min band kept bright for 夜間視認性) ----
@@ -778,6 +848,328 @@ const _desired=new THREE.Vector3(), _look=new THREE.Vector3(), _sv=new THREE.Vec
 const _dir=new THREE.Vector3(), _ft=new THREE.Vector3();
 let camFocus=null, camFocusK=0;   // カード表示中にカメラを灯へ寄せる
 
+// ============================================================
+//  CINEMA SYSTEM（シネマティック自動再生モード）
+// ============================================================
+const recBtn = document.getElementById('recBtn');
+const cinemaTextEl = document.getElementById('cinemaText');
+const capEl = document.getElementById('cap');
+
+let cinemaActive=false, cinemaT=0, cinemaPauseRem=0;
+let cinemaAutoFwd=0, cinemaAutoTurn=0, cinemaWpIdx=0, cinemaTextShown=false;
+let cinemaWPs=[];
+let cinemaPausesUsed=0, cinemaSpotPausing=false;
+let cinemaStarShot=false, cinemaConstel=false, cinemaVert=false;
+let cinemaPreVisited=null, cinemaOrigRandom=null, cinemaSaveShoot=0;
+const cinTimers=[];
+function cinLater(fn,ms){ cinTimers.push(setTimeout(fn,ms)); }
+function cinClearTimers(){ while(cinTimers.length) clearTimeout(cinTimers.pop()); }
+
+// 字幕（テキストは配列で一元管理・差し替え可能 / t0〜t1 はシーケンス秒）
+const CIN_CAPS=[
+  {t0: 0.0, t1: 3.0,  text:"これ、アプリじゃなくてホームページです"},
+  {t0: 8.0, t1:12.5,  text:"キャラを歩かせて情報を集めるサイト"},
+  {t0:15.5, t1:20.0,  text:"Three.js × AI で個人制作"},
+];
+function cinCapsStep(){
+  for(const c of CIN_CAPS){
+    if(!c._on && cinemaT>=c.t0 && cinemaT<c.t1){
+      c._on=true; capEl.textContent=c.text; capEl.classList.add('show');
+    } else if(c._on && cinemaT>=c.t1){
+      c._on=false; capEl.classList.remove('show');
+    }
+  }
+}
+
+// シーケンス中の乱数シード固定（毎回同じ絵になる：撮り直しの再現性）
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+// 確定発生の流れ星（カメラ視界を横切る・シード非依存で毎回同じ軌道）
+function cinShootStar(){
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:haloTex,color:0xffffff,
+    blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:0,fog:false}));
+  const cd=new THREE.Vector3(); camera.getWorldDirection(cd);
+  const rt=new THREE.Vector3().crossVectors(cd,camera.up).normalize();
+  sp.position.copy(camera.position).addScaledVector(cd,90).addScaledVector(camera.up,45).addScaledVector(rt,38);
+  sp.userData={dir:rt.clone().multiplyScalar(-1).addScaledVector(camera.up,-0.35).addScaledVector(cd,0.1).normalize(),
+    life:0,max:1.5,speed:190};
+  scene.add(sp); shooters.push(sp);
+}
+
+// --- 事前確保ベクトル（毎フレームのGC割り当てゼロ） ---
+const _kfPA=new THREE.Vector3(), _kfPB=new THREE.Vector3();
+const _kfLA=new THREE.Vector3(), _kfLB=new THREE.Vector3();
+const _kPos=new THREE.Vector3(), _kLook=new THREE.Vector3();
+const _kW=new THREE.Vector3(),  _kTU=new THREE.Vector3();
+const _kF=new THREE.Vector3(),  _kR=new THREE.Vector3(), _kU2=new THREE.Vector3();
+const _wpP=new THREE.Vector3(), _wpDir=new THREE.Vector3();
+const _wpFwd=new THREE.Vector3(), _wpRgt=new THREE.Vector3();
+const _bwU=new THREE.Vector3(), _bwV=new THREE.Vector3();
+
+function _easeC(t,type){
+  if(!type||type==='lin') return t;
+  if(type==='out') return 1-(1-t)*(1-t);
+  if(type==='io')  return t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+  return t;
+}
+
+// --- カメラキーフレーム ---
+// rel:{f=前後, u=上下, r=左右} travelerローカルオフセット / lk:'tr'=旅人, 'pl'=惑星中心
+const CAM_KF=[
+  {t: 0.0, rel:{f:-6, u:60, r:0},  lk:'tr', ease:'out'},  // Hook: 上空から
+  {t: 1.5, rel:{f:-16,u:16, r:0},  lk:'tr', ease:'out'},
+  {t: 3.0, rel:{f:-9, u:5.2,r:0},  lk:'tr', ease:'out'},  // 追従開始
+  {t: 6.0, rel:{f:-9, u:5.2,r:0},  lk:'tr', ease:'lin'},
+  {t: 7.5, rel:{f:-3, u:4,  r:11}, lk:'tr', ease:'io'},   // サイドショット
+  {t:11.0, rel:{f:-3, u:4,  r:11}, lk:'tr', ease:'lin'},
+  {t:12.5, rel:{f:-28,u:12, r:6},  lk:'pl', ease:'io'},   // World Tour: 引き
+  {t:15.0, rel:{f:-28,u:12, r:6},  lk:'pl', ease:'lin'},
+  {t:16.5, rel:{f:-9, u:5.2,r:0},  lk:'tr', ease:'out'},  // Highlight: 再接近
+  {t:20.0, rel:{f:-7, u:3.5,r:4},  lk:'tr', ease:'lin'},
+  {t:21.5, rel:{f:-50,u:30, r:0},  lk:'pl', ease:'io'},   // Closing: 大引き
+  {t:25.0, rel:{f:-58,u:38, r:0},  lk:'pl', ease:'lin'},  // 25秒以降は完全静止（サムネ用）
+];
+
+function _kfPos(kf,out){
+  if(kf.abs){ out.copy(kf.abs); return; }
+  traveler.getWorldPosition(out);
+  _kU2.copy(out).normalize();
+  _kF.set(0,0,-1).applyQuaternion(pivot.quaternion).normalize();
+  _kR.set(1,0,0).applyQuaternion(pivot.quaternion).normalize();
+  const vf=cinemaVert?1.3:1;   // 9:16縦画面では引きを強めて中央セーフエリアに収める
+  out.addScaledVector(_kF, kf.rel.f*vf)
+     .addScaledVector(_kU2, kf.rel.u*vf)
+     .addScaledVector(_kR, kf.rel.r*vf);
+}
+function _kfLook(kf,out){
+  if(kf.lk==='pl'){ out.set(0,0,0); return; }
+  traveler.getWorldPosition(out);
+  _kU2.copy(out).normalize();
+  out.addScaledVector(_kU2, 1.6);
+}
+
+function updateCinemaCamera(dt){
+  let i=0;
+  while(i<CAM_KF.length-2 && cinemaT>CAM_KF[i+1].t) i++;
+  const A=CAM_KF[i], B=CAM_KF[i+1];
+  const span=B.t-A.t;
+  const raw=span>0 ? (cinemaT-A.t)/span : 1;
+  const p=_easeC(Math.max(0,Math.min(1,raw)), A.ease);
+  _kfPos(A,_kfPA); _kfPos(B,_kfPB);
+  _kPos.lerpVectors(_kfPA,_kfPB,p);
+  _kfLook(A,_kfLA); _kfLook(B,_kfLB);
+  _kLook.lerpVectors(_kfLA,_kfLB,p);
+  traveler.getWorldPosition(_kW);
+  _kTU.copy(_kW).normalize();
+  const alpha = cinemaT<3.0 ? 1.0 : (1-Math.pow(0.005,dt));
+  camera.position.lerp(_kPos, alpha);
+  camera.up.lerp(_kTU, 1-Math.pow(0.01,dt)).normalize();
+  camera.lookAt(_kLook);
+}
+
+// --- ウェイポイント生成：チェックポイント（星の灯）を3つ巡るルート ---
+const RING_AXIS=V3(0.35,1,0.25).normalize();   // よけ方向のフォールバック用
+function _slerpDir(a,b,t){
+  const ang=a.angleTo(b);
+  if(ang<1e-4) return b.clone();
+  const sa=Math.sin(ang);
+  return a.clone().multiplyScalar(Math.sin((1-t)*ang)/sa)
+          .addScaledVector(b, Math.sin(t*ang)/sa).normalize();
+}
+function buildWaypoints(){
+  const wps=[];
+  traveler.getWorldPosition(_wpP);
+  let cur=_wpP.clone().normalize();
+  // 現在地から近い順に3つの灯を選ぶ（貪欲法）
+  const pool=shards.slice(), picks=[];
+  for(let n=0;n<3 && pool.length;n++){
+    let bi=0, bd=Infinity;
+    for(let i=0;i<pool.length;i++){
+      const a=pool[i].userData.baseDir.angleTo(cur);
+      if(a<bd){ bd=a; bi=i; }
+    }
+    picks.push(pool.splice(bi,1)[0].userData.baseDir.clone().normalize());
+    cur=picks[picks.length-1];
+  }
+  // 大円補間で経路を生成（障害物に近い点は接線方向の脇へ逃がす）
+  let from=_wpP.clone().normalize();
+  for(let pi=0;pi<picks.length;pi++){
+    const to=picks[pi];
+    const steps=Math.max(2, Math.ceil(from.angleTo(to)/0.22));
+    for(let i=1;i<=steps;i++){
+      const d=_slerpDir(from,to,i/steps);
+      if(i<steps){   // 灯の真下（最終点）はよけない
+        for(let k=0;k<3;k++){
+          let hit=null;
+          for(let j=0;j<obstacles.length;j++){
+            const ob=obstacles[j];
+            if(d.dot(ob.dir) > Math.cos(Math.acos(Math.min(1,ob.cos))+0.07)){ hit=ob; break; }
+          }
+          if(!hit) break;
+          _bwV.copy(d).addScaledVector(hit.dir, -d.dot(hit.dir));   // 障害物→d の接線方向
+          if(_bwV.lengthSq()<1e-6) _bwV.copy(RING_AXIS); else _bwV.normalize();
+          d.addScaledVector(_bwV, 0.12).normalize();
+        }
+      }
+      wps.push(d.multiplyScalar(R));
+    }
+    from=to;
+  }
+  return wps;
+}
+
+// --- 自動歩行：ウェイポイントへ向けて fwd/turn を合成 ---
+const CIN_SPEED=0.34;   // 歩行速度（1.0=手動最高速。映像用にゆっくり）
+function _autoWalk(){
+  if(cinemaWpIdx>=cinemaWPs.length){ cinemaAutoFwd=0; cinemaAutoTurn=0; return; }
+  const tgt=cinemaWPs[cinemaWpIdx];
+  traveler.getWorldPosition(_wpP);
+  if(_wpP.distanceTo(tgt)<2.2){ cinemaWpIdx++; return; }
+  _wpDir.copy(tgt).sub(_wpP).normalize();
+  _wpFwd.set(0,0,-1).applyQuaternion(pivot.quaternion).normalize();
+  _wpRgt.set(1,0,0).applyQuaternion(pivot.quaternion).normalize();
+  const f=_wpDir.dot(_wpFwd), r=_wpDir.dot(_wpRgt);
+  cinemaAutoFwd  = Math.max(0, Math.min(1, f*1.4))*CIN_SPEED;
+  cinemaAutoTurn = Math.max(-1, Math.min(1, -r*2.5));   // +X側なら右旋回(turn<0)
+}
+
+// --- シネマ本体ステップ（update末尾から呼ばれる） ---
+const CLOSEUP_KF={rel:{f:-7, u:4.2, r:3.5}, lk:'tr'};   // スポット停止中の寄りショット
+function cinemaStep(dt){
+  if(!cinemaActive) return;
+  if(cinemaPauseRem>0){                 // スポット/テキスト表示中の停止
+    cinemaPauseRem-=dt;
+    cinemaAutoFwd=0; cinemaAutoTurn=0;
+    if(cinemaSpotPausing){
+      // カードを読ませる間、カメラは旅人へ寄る
+      _kfPos(CLOSEUP_KF,_kPos); _kfLook(CLOSEUP_KF,_kLook);
+      const a=1-Math.pow(0.02,dt);
+      camera.position.lerp(_kPos,a);
+      traveler.getWorldPosition(_kW); _kTU.copy(_kW).normalize();
+      camera.up.lerp(_kTU,a).normalize();
+      camera.lookAt(_kLook);
+      if(cinemaPauseRem<=0){   // 停止終了 → カードを閉じてから歩行再開
+        cinemaSpotPausing=false;
+        cardEl.classList.remove('show'); camFocus=null;
+      }
+    } else {
+      updateCinemaCamera(dt);
+    }
+    return;
+  }
+  cinemaT+=dt;
+  if(cinemaT>27.0){ stopCinema(); return; }
+  cinCapsStep();                                    // 字幕①②③
+  if(!cinemaStarShot && cinemaT>=16.0){ cinemaStarShot=true; cinShootStar(); }   // 確定流れ星
+  if(!cinemaConstel && cinemaT>=21.5){              // 星座演出を強制表示
+    cinemaConstel=true;
+    if(!constellation) buildConstellation();
+  }
+  if(cinemaConstel && constellation){
+    const o=Math.min((cinemaT-21.5)*0.55, 0.9);
+    constellation.material.opacity=o;
+    constellation.children.forEach(h=>{ if(h.userData.node) h.material.opacity=Math.min(o,0.85); });
+  }
+  _autoWalk();
+  // チェックポイント接近 → 情報カードを表示して2.8秒停止（最大3回）
+  if(cinemaPausesUsed<3 && cinemaT<20.5){
+    traveler.getWorldPosition(_wpP);
+    for(let i=0;i<shards.length;i++){
+      const s=shards[i];
+      if(s.userData._cinePaused) continue;
+      if(_wpP.distanceTo(s.position)<3.2){
+        s.userData._cinePaused=true;
+        cinemaPausesUsed++;
+        visit(s);                     // カード表示（近くに行くと読める、を見せる）
+        cinemaPauseRem=1.0;           // カード表示〜閉じるまで1秒
+
+        cinemaSpotPausing=true;
+        cinemaAutoFwd=0; cinemaAutoTurn=0;
+        break;
+      }
+    }
+  }
+  // 終盤テキスト表示 → 2.5秒停止
+  if(!cinemaTextShown && cinemaT>=22.0){
+    cinemaTextShown=true;
+    cinemaTextEl.classList.add('show');
+    cinemaPauseRem=2.5;
+    cinemaSpotPausing=false;
+    cinemaAutoFwd=0; cinemaAutoTurn=0;
+  }
+  updateCinemaCamera(dt);
+}
+
+// --- Start / Stop ---
+function startCinema(){
+  if(cinemaActive) return;
+  cinClearTimers();
+  cinemaActive=true; cinemaT=0; cinemaPauseRem=0;
+  cinemaWpIdx=0; cinemaTextShown=false;
+  cinemaAutoFwd=0; cinemaAutoTurn=0;
+  cinemaPausesUsed=0; cinemaSpotPausing=false;
+  cinemaStarShot=false; cinemaConstel=false;
+  CIN_CAPS.forEach(c=>c._on=false); capEl.classList.remove('show');
+  shards.forEach(s=>s.userData._cinePaused=false);
+  cinemaPreVisited=shards.map(s=>!!s.userData.visited);   // 撮り直し再現性：訪問状態を退避
+  cinemaWPs=buildWaypoints();
+  cinemaTextEl.classList.remove('show');
+  cardEl.classList.remove('show'); camFocus=null; clearTimeout(cardTimer);
+  // 乱数シード固定＋アンビエント流れ星の抑止（毎回同じ絵に）
+  cinemaOrigRandom=Math.random; Math.random=mulberry32(20260708);
+  cinemaSaveShoot=nextShoot; nextShoot=9999;
+  // 撮影向け画質（antialiasは生成時に有効済み）
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  // 9:16縦画面モード
+  cinemaVert=/vertical/.test(location.hash);
+  if(cinemaVert) document.body.classList.add('vertical');
+  document.body.classList.add('recording');
+  document.addEventListener('keydown',_onCinemaEsc);
+  // ボタン押下自体のイベントを拾わないよう少し遅らせてタップ中断を有効化
+  cinLater(()=>document.addEventListener('pointerdown',_onCinemaTap,{passive:true}),400);
+}
+function stopCinema(){
+  if(!cinemaActive) return;
+  cinemaActive=false;
+  cinClearTimers();
+  document.body.classList.remove('recording');
+  document.body.classList.remove('vertical');
+  capEl.classList.remove('show');
+  cinLater(()=>cinemaTextEl.classList.remove('show'),1200);
+  document.removeEventListener('keydown',_onCinemaEsc);
+  document.removeEventListener('pointerdown',_onCinemaTap);
+  cardEl.classList.remove('show'); camFocus=null; clearTimeout(cardTimer);
+  // 乱数・流れ星タイマーを復元
+  if(cinemaOrigRandom){ Math.random=cinemaOrigRandom; cinemaOrigRandom=null; }
+  nextShoot=Math.max(1,cinemaSaveShoot)||3;
+  // シーケンス中に訪問したスポットを元に戻す（撮り直しで同じ絵になる）
+  if(cinemaPreVisited){
+    shards.forEach((s,i)=>{
+      if(!cinemaPreVisited[i] && s.userData.visited){
+        s.userData.visited=false; collected=Math.max(0,collected-1);
+        s.userData.core.material.color.set(COL.lantern); s.userData.core.material.emissive.set(COL.lantern);
+        if(s.userData.halo) s.userData.halo.material.color.set(COL.lantern);
+        if(s.userData.ring){ s.userData.ring.material.color.set(COL.lantern); s.userData.ring.material.emissive.set(COL.lantern); }
+      }
+    });
+    refreshProgress(); cinemaPreVisited=null;
+  }
+  // 強制表示した星座を消す（正規クリア演出時は残す）
+  if(constellation && !clearing){
+    constellation.material.opacity=0;
+    constellation.children.forEach(h=>{ if(h.userData.node) h.material.opacity=0; });
+  }
+  // 手動カメラへなめらかに復帰
+  camUp.copy(camera.up).normalize();
+  lookAt.copy(_kLook);
+}
+function _onCinemaEsc(e){ if(e.key==='Escape') stopCinema(); }
+function _onCinemaTap(){ stopCinema(); }
+recBtn.addEventListener('click',e=>{
+  e.stopPropagation();
+  cinemaActive ? stopCinema() : startCinema();
+});
+
 function update(dt){
   // input → forward / turn
   let fwd=0, turn=0;
@@ -790,6 +1182,9 @@ function update(dt){
   }
   fwd=Math.max(-1,Math.min(1,fwd)); turn=Math.max(-1,Math.min(1,turn));
 
+  // シネマ中は自動歩行が入力を上書き
+  if(cinemaActive){ fwd=cinemaAutoFwd; turn=cinemaAutoTurn; }
+
   const moving=Math.abs(fwd)>0.02;
   // turn about local up (Y), move about local right (X)
   if(turn!==0){
@@ -801,9 +1196,12 @@ function update(dt){
     _q.setFromAxisAngle(AX_X, -fwd*MOVE*dt);
     pivot.quaternion.multiply(_q);
     // 簡易衝突：進行後のキャラ方向が障害物の角度閾値内なら前進を取り消す（旋回は許可）
-    _dir.set(0,1,0).applyQuaternion(pivot.quaternion);
-    for(let i=0;i<obstacles.length;i++){
-      if(_dir.dot(obstacles[i].dir) > obstacles[i].cos){ pivot.quaternion.copy(_qSave); break; }
+    // シネマ中はウェイポイントが障害物を避けるためスキップ（引っかかり防止）
+    if(!cinemaActive){
+      _dir.set(0,1,0).applyQuaternion(pivot.quaternion);
+      for(let i=0;i<obstacles.length;i++){
+        if(_dir.dot(obstacles[i].dir) > obstacles[i].cos){ pivot.quaternion.copy(_qSave); break; }
+      }
     }
   }
 
@@ -825,18 +1223,20 @@ function update(dt){
   // ---- camera : lerp position / up / look ----
   traveler.getWorldPosition(_cp);
   _up.copy(_cp).normalize();
-  _fw.set(0,0,-1).applyQuaternion(pivot.quaternion).normalize();
-  _desired.copy(_cp).addScaledVector(_fw,-9).addScaledVector(_up,5.2);
-  // カード表示中：ランプ方向へ13%ゆっくり寄る（閉じるとlerpで戻る）
-  camFocusK += ((camFocus?1:0)-camFocusK)*(1-Math.pow(0.02,dt));
-  if(camFocus) camFocus.getWorldPosition(_ft);
-  if(camFocusK>0.002) _desired.lerp(_ft, 0.13*camFocusK);
-  camera.position.lerp(_desired, 1-Math.pow(0.001,dt));
-  camUp.lerp(_up, 1-Math.pow(0.0005,dt)).normalize(); camera.up.copy(camUp);
-  _look.copy(_cp).addScaledVector(_up,1.6);
-  if(camFocusK>0.002) _look.lerp(_ft, 0.2*camFocusK);
-  lookAt.lerp(_look, 1-Math.pow(0.0008,dt));
-  camera.lookAt(lookAt);
+  if(!cinemaActive){   // シネマ中はキーフレームカメラが制御
+    _fw.set(0,0,-1).applyQuaternion(pivot.quaternion).normalize();
+    _desired.copy(_cp).addScaledVector(_fw,-9).addScaledVector(_up,5.2);
+    // カード表示中：ランプ方向へ13%ゆっくり寄る（閉じるとlerpで戻る）
+    camFocusK += ((camFocus?1:0)-camFocusK)*(1-Math.pow(0.02,dt));
+    if(camFocus) camFocus.getWorldPosition(_ft);
+    if(camFocusK>0.002) _desired.lerp(_ft, 0.13*camFocusK);
+    camera.position.lerp(_desired, 1-Math.pow(0.001,dt));
+    camUp.lerp(_up, 1-Math.pow(0.0005,dt)).normalize(); camera.up.copy(camUp);
+    _look.copy(_cp).addScaledVector(_up,1.6);
+    if(camFocusK>0.002) _look.lerp(_ft, 0.2*camFocusK);
+    lookAt.lerp(_look, 1-Math.pow(0.0008,dt));
+    camera.lookAt(lookAt);
+  }
 
   // ---- shards : bob / spin / visit ----  (_cp = traveler world pos)
   shards.forEach(s=>{
@@ -846,9 +1246,12 @@ function update(dt){
     s.userData.core.rotation.y+=dt*1.5; s.userData.core.rotation.x+=dt*0.8;
     if(s.userData.ring) s.userData.ring.rotation.z+=dt*0.6;
     // 近接でカード表示（離れて再接近すれば何度でも表示：ヒステリシス付き）
-    const d=s.position.distanceTo(_cp);
-    if(d<2.6){ if(!s.userData.inRange){ s.userData.inRange=true; visit(s); } }
-    else if(d>3.8){ s.userData.inRange=false; }
+    // シネマ中はcinemaStep側が表示/閉じを制御するためスキップ
+    if(!cinemaActive){
+      const d=s.position.distanceTo(_cp);
+      if(d<2.6){ if(!s.userData.inRange){ s.userData.inRange=true; visit(s); } }
+      else if(d>3.8){ s.userData.inRange=false; }
+    }
   });
 
   // crystals gentle pulse
@@ -884,6 +1287,9 @@ function update(dt){
       constellation.children.forEach(h=>{ if(h.userData.node) h.material.opacity=Math.min(clearT*0.4,0.85); });
     }
   }
+
+  // ---- cinema step（自動歩行の入力更新＋キーフレームカメラ） ----
+  cinemaStep(dt);
 }
 
 // ============================================================
@@ -932,7 +1338,7 @@ function visit(s){
     s.userData.core.material.emissive.set(COL.crys1);
     if(s.userData.halo) s.userData.halo.material.color.set(COL.crys1);
     if(s.userData.ring){ s.userData.ring.material.color.set(COL.crys1); s.userData.ring.material.emissive.set(COL.crys1); }
-    if(collected>=7) triggerClear();
+    if(collected>=7 && !cinemaActive) triggerClear();   // シネマ中の到達では発火させない（停止時に巻き戻すため）
   }
 }
 function triggerClear(){
@@ -947,8 +1353,9 @@ function triggerClear(){
 //  LOOP / RESIZE / START
 // ============================================================
 addEventListener('resize',()=>{
-  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
+  const s=viewSize();
+  camera.aspect=s[0]/s[1]; camera.updateProjectionMatrix();
+  renderer.setSize(s[0],s[1]);
 });
 
 let last=performance.now();
@@ -965,6 +1372,7 @@ const startEl=document.getElementById('start');
 function begin(){
   if(started)return; started=true;
   startEl.classList.add('hide');
+  document.body.classList.add('started');   // 録画再生ボタンを表示
   // show stick on touch devices
   if(matchMedia('(hover:none)').matches) stickEl.style.display='block';
 }
