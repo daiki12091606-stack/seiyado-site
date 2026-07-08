@@ -1119,8 +1119,8 @@ function cinemaStep(dt){
     constellation.children.forEach(h=>{ if(h.userData.node){ h.material.opacity=Math.min(o,1.0); h.scale.setScalar(8*(0.7+0.3*o)); } });
   }
   _autoWalk();
-  // チェックポイント接近 → 情報カードを自動で開き2.6秒表示（2回・ツアー帯）
-  if(cinemaPausesUsed<2 && cinemaT<15.0){
+  // まず3秒は歩くシーンを見せる → その後チェックポイント接近で情報カードを2枚順に開く（各2.6秒）
+  if(cinemaPausesUsed<2 && cinemaT>=3.0 && cinemaT<15.0){
     traveler.getWorldPosition(_wpP);
     for(let i=0;i<shards.length;i++){
       const s=shards[i];
