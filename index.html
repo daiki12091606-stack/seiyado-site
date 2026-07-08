@@ -178,8 +178,8 @@
     border:1px solid rgba(255,212,127,.25);border-radius:13px;}
   #cinemaText.show{ opacity:1; }
   #cinemaText .main{font-family:"Hiragino Mincho ProN","Yu Mincho","MS PMincho",serif;
-    font-size:clamp(26px,6vw,38px);letter-spacing:.3em;
-    color:#ffd47f;text-shadow:0 0 24px rgba(255,212,127,.6);}
+    font-size:clamp(36px,8.5vw,54px);letter-spacing:.32em;
+    color:#ffd47f;text-shadow:0 0 28px rgba(255,212,127,.65);}
   #cinemaText .sub{font-size:clamp(13px,3.4vw,17px);letter-spacing:.2em;
     color:#e8ecff;opacity:.9;margin-top:16px;}
   #cinemaText .prof{font-size:clamp(11px,3vw,14px);letter-spacing:.22em;
@@ -1387,9 +1387,9 @@ function buildupStep(dt){
   const T=buildT;
   const orbit = T*0.5;   // 周回アングル
 
-  // Stage 0: グレー球のオーバーシュート出現
+  // Stage 0: グレー球のオーバーシュート出現（冒頭0.4秒で素早くポン＝離脱対策）
   if(T<1.5){
-    const p=T/0.9; planetMesh.scale.setScalar(1*Math.min(1.05, _easeOutBack(Math.min(1,p))));
+    const p=T/0.4; planetMesh.scale.setScalar(1*Math.min(1.05, _easeOutBack(Math.min(1,p))));
     _buildCam(30, 6, orbit, dt, T<0.05);
   }
   // Stage 1: トゥーン＋輪郭が適用（1フレーム差し替え＋白フラッシュ）
