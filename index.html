@@ -1661,6 +1661,7 @@ addEventListener('resize',()=>{
 let last=performance.now();
 function loop(now){
   const dt=Math.min((now-last)/1000,0.05); last=now;
+  if(window.__loopPaused){ requestAnimationFrame(loop); return; }   // QA用：pumpで手動駆動する間ループ停止
   if(buildActive) buildupStep(dt);            // ビルドアップ中は通常updateを止めて占有
   else if(started) update(dt);
   renderer.render(scene,camera);
