@@ -149,8 +149,16 @@
     color:#ffd47f;font-size:13px;letter-spacing:.14em;font-family:inherit;
     backdrop-filter:blur(6px);transition:opacity .3s;display:none;
   }
-  body.started #recBtn{display:block;}
-  #recBtn:hover{opacity:.8;}
+  #buildBtn{
+    position:fixed;bottom:24px;right:130px;z-index:30;
+    padding:9px 16px;border-radius:24px;cursor:pointer;
+    background:rgba(26,34,68,.72);border:1.5px solid #7fe3d4;
+    color:#7fe3d4;font-size:13px;letter-spacing:.14em;font-family:inherit;
+    backdrop-filter:blur(6px);transition:opacity .3s;display:none;
+  }
+  body.started #recBtn, body.started #buildBtn{display:block;}
+  body.recording #buildBtn{display:none !important;}
+  #recBtn:hover,#buildBtn:hover{opacity:.8;}
   /* 録画中に隠すのは HUD の操作系のみ。情報カードは残す（見せ場なので） */
   body.recording #recBtn,
   body.recording #progress,
@@ -253,6 +261,7 @@
 </div>
 
 <button id="recBtn">● 録画再生</button>
+<button id="buildBtn">◇ 生成再生</button>
 <div id="flash"></div>
 <div id="cap"></div>
 <div id="cinemaText">
@@ -414,6 +423,7 @@ function halo(color, size, op){
 // ============================================================
 const planet = new THREE.Group(); scene.add(planet);
 const obstacles = [];   // 簡易衝突判定用（方向ベクトル＋角度閾値cos）
+let skyStars=null, skyDome=null;   // ビルドアップ演出で参照
 
 const planetMesh = cel(new THREE.SphereGeometry(R, 48, 48), COL.ground, 0.18);
 planet.add(planetMesh);
@@ -711,18 +721,18 @@ function starGate(dir,tan){
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));
   const mat=new THREE.PointsMaterial({size:1.1,sizeAttenuation:true,vertexColors:true,
     transparent:true,opacity:.9,depthWrite:false,fog:false});  // フォグで遠景の星が消えないように
-  scene.add(new THREE.Points(geo,mat));
+  skyStars=new THREE.Points(geo,mat); scene.add(skyStars);
 })();
 
 // gradient skydome (深い紺→藍)
 (function skydome(){
   const geo=new THREE.SphereGeometry(900,32,16);
-  const mat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
-    uniforms:{top:{value:new TColor(0x0e1430)},bot:{value:new TColor(0x24306a)}},
+  const mat=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,transparent:true,
+    uniforms:{top:{value:new TColor(0x0e1430)},bot:{value:new TColor(0x24306a)},op:{value:1}},
     vertexShader:`varying vec3 vp; void main(){vp=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec3 vp; uniform vec3 top; uniform vec3 bot;
-      void main(){ float h=normalize(vp).y*0.5+0.5; gl_FragColor=vec4(mix(bot,top,h),1.0);}`});
-  scene.add(new THREE.Mesh(geo,mat));
+    fragmentShader:`varying vec3 vp; uniform vec3 top; uniform vec3 bot; uniform float op;
+      void main(){ float h=normalize(vp).y*0.5+0.5; gl_FragColor=vec4(mix(bot,top,h),op);}`});
+  skyDome=new THREE.Mesh(geo,mat); scene.add(skyDome);
 })();
 
 // shooting stars
@@ -864,8 +874,11 @@ let camFocus=null, camFocusK=0;   // カード表示中にカメラを灯へ寄�
 //  CINEMA SYSTEM（シネマティック自動再生モード）
 // ============================================================
 const recBtn = document.getElementById('recBtn');
+const buildBtn = document.getElementById('buildBtn');
 const cinemaTextEl = document.getElementById('cinemaText');
 const capEl = document.getElementById('cap');
+const endSubEl = cinemaTextEl.querySelector('.sub');
+const _endSubDefault = endSubEl ? endSubEl.textContent : '';
 
 let cinemaActive=false, cinemaT=0, cinemaPauseRem=0;
 let cinemaAutoFwd=0, cinemaAutoTurn=0, cinemaWpIdx=0, cinemaTextShown=false;
@@ -1220,6 +1233,238 @@ recBtn.addEventListener('click',e=>{
   cinemaActive ? stopCinema() : startCinema();
 });
 
+// ============================================================
+//  BUILDUP MONTAGE MODE（世界がゼロから組み上がる #buildup）
+// ============================================================
+let buildActive=false, buildT=0, buildVert=false;
+let buildTerrain=null, buildOrigRandom=null, buildPrevScale=new Map();
+let buildPlanetToonMat=null, buildPlanetGreyMat=null, buildOutline=null;
+let buildStageCap=-1;
+const _bqCam=new THREE.Vector3(), _bqLook=new THREE.Vector3(), _bqUp=new THREE.Vector3();
+
+// ステージ字幕（明朝・配列管理）
+const BUILD_CAPS=[
+  {t0:0.0,  t1:1.5,  text:"ただの球が"},
+  {t0:1.6,  t1:3.0,  text:"絵になって"},
+  {t0:3.1,  t1:4.5,  text:"夜が来て"},
+  {t0:4.6,  t1:8.0,  text:"世界が生えて"},
+  {t0:8.1,  t1:10.0, text:"歩き出す"},
+];
+function buildCapsStep(){
+  for(const c of BUILD_CAPS){
+    if(!c._on && buildT>=c.t0 && buildT<c.t1){ c._on=true; capEl.textContent=c.text; capEl.classList.add('show'); }
+    else if(c._on && buildT>=c.t1){ c._on=false; capEl.classList.remove('show'); }
+  }
+}
+const _easeOutBack=(t)=>{ const c1=1.70158,c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); };
+function popScale(obj, baseVec, p){ const e=Math.max(0.0001,_easeOutBack(Math.min(1,Math.max(0,p)))); obj.scale.set(baseVec.x*e,baseVec.y*e,baseVec.z*e); }
+
+function _collectTerrain(){
+  // planet 直下の子から「地形」を抽出（惑星本体とシャードは除外）
+  const arr=[];
+  for(const c of planet.children){
+    if(c===planetMesh) continue;
+    if(shards.includes(c)) continue;
+    arr.push(c);
+  }
+  return arr;
+}
+
+function startBuildup(){
+  if(buildActive) return;
+  cinClearTimers();
+  if(cinemaActive) stopCinema();
+  buildActive=true; buildT=0; buildStageCap=-1; buildStar=false;
+  BUILD_CAPS.forEach(c=>c._on=false); capEl.classList.remove('show');
+  if(endSubEl) endSubEl.textContent='これ、全部ホームページです';   // ビルドアップ用エンドカード文言
+  buildVert=/vertical/.test(location.hash);
+  document.body.classList.toggle('vertical',buildVert);
+  document.body.classList.add('recording');   // HUD非表示（ロゴのみ）
+  // 乱数シード固定・アンビ流れ星抑止
+  buildOrigRandom=Math.random; Math.random=mulberry32(20260708);
+  cinemaSaveShoot=nextShoot; nextShoot=9999;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+
+  // --- 状態を退避して初期化（真っ暗＋グレー球のみ） ---
+  buildTerrain=_collectTerrain();
+  buildPrevScale.clear();
+  // 惑星本体：グレーBasicに差し替え・輪郭を隠す
+  buildPlanetToonMat=planetMesh.material;
+  if(!buildPlanetGreyMat) buildPlanetGreyMat=new THREE.MeshBasicMaterial({color:0x8a8f9c});
+  planetMesh.material=buildPlanetGreyMat;
+  buildOutline=planetMesh.children.find(ch=>ch.material&&ch.material.side===THREE.BackSide)||planetMesh.children[0];
+  if(buildOutline) buildOutline.visible=false;
+  planetMesh.scale.setScalar(0.0001);
+  // 地形・シャードを scale0 で隠す
+  buildTerrain.forEach(o=>{ buildPrevScale.set(o, o.scale.clone()); o.scale.setScalar(0.0001); o.userData._popAt=0; });
+  traveler.userData._popAt=0;
+  shards.forEach(s=>{ buildPrevScale.set(s, s.scale.clone()); s.scale.setScalar(0.0001); });
+  // 空を消す
+  if(skyStars) skyStars.material.opacity=0;
+  if(skyDome) skyDome.material.uniforms.op.value=0;
+  scene.fog.density=0.0;
+  // 昼光（フラットに明るく）から開始
+  moon.intensity=0.0; hemi.intensity=0.0; amb.intensity=1.15; amb.color.set(0xbfc4d2);
+  renderer.setClearColor(0x05070f,1);
+  // 旅人・ランタン初期化
+  traveler.scale.setScalar(0.0001);
+  if(traveler.userData.lp) traveler.userData.lp.intensity=0;
+  // カメラ初期位置（正面やや上）
+  traveler.getWorldPosition(_bqLook);
+  camera.up.set(0,1,0);
+
+  document.addEventListener('keydown',_onBuildEsc);
+  cinLater(()=>document.addEventListener('pointerdown',_onBuildTap,{passive:true}),400);
+  flashEl.classList.remove('on');
+}
+
+function _restoreBuildup(){
+  // 惑星
+  if(buildPlanetToonMat) planetMesh.material=buildPlanetToonMat;
+  if(buildOutline) buildOutline.visible=true;
+  planetMesh.scale.setScalar(1);
+  // 地形・シャード
+  if(buildTerrain) buildTerrain.forEach(o=>{ const v=buildPrevScale.get(o); if(v) o.scale.copy(v); else o.scale.setScalar(1); });
+  shards.forEach(s=>{ const v=buildPrevScale.get(s); if(v) s.scale.copy(v); else s.scale.setScalar(1); });
+  // 空
+  if(skyStars) skyStars.material.opacity=0.9;
+  if(skyDome) skyDome.material.uniforms.op.value=1;
+  scene.fog.density=0.010;
+  // 夜の3灯へ復元
+  moon.intensity=0.85; hemi.intensity=0.75; amb.intensity=0.35; amb.color.set(0x2a3566);
+  renderer.setClearColor(0x0d1330,1);
+  // 旅人・ランタン
+  traveler.scale.setScalar(1);
+  if(traveler.userData.lp) traveler.userData.lp.intensity=1.7;
+  // 流れ星タイマー
+  if(buildOrigRandom){ Math.random=buildOrigRandom; buildOrigRandom=null; }
+  nextShoot=Math.max(1,cinemaSaveShoot)||3;
+}
+function stopBuildup(){
+  if(!buildActive) return;
+  buildActive=false; cinClearTimers();
+  document.body.classList.remove('recording'); document.body.classList.remove('vertical');
+  capEl.classList.remove('show');
+  cinLater(()=>cinemaTextEl.classList.remove('show'),1200);
+  document.removeEventListener('keydown',_onBuildEsc);
+  document.removeEventListener('pointerdown',_onBuildTap);
+  flashEl.classList.remove('on');
+  if(endSubEl) endSubEl.textContent=_endSubDefault;   // エンドカード文言を戻す
+  _restoreBuildup();
+  // 手動カメラへ復帰
+  camUp.copy(camera.up).normalize(); lookAt.copy(_bqLook);
+}
+function _onBuildEsc(e){ if(e.key==='Escape') stopBuildup(); }
+function _onBuildTap(){ stopBuildup(); }
+
+// カメラ：旅人を中心に、指定の距離・仰角・方位でセット
+function _buildCam(dist, up, ang, dt, snap){
+  traveler.getWorldPosition(_bqLook);
+  const u=_bqUp.copy(_bqLook).normalize();
+  // 接線基底
+  const ref = Math.abs(u.y)>0.9 ? V3(1,0,0) : V3(0,1,0);
+  const t1 = new THREE.Vector3().crossVectors(u,ref).normalize();
+  const t2 = new THREE.Vector3().crossVectors(u,t1).normalize();
+  _bqCam.copy(_bqLook)
+    .addScaledVector(u, up)
+    .addScaledVector(t1, Math.cos(ang)*dist)
+    .addScaledVector(t2, Math.sin(ang)*dist);
+  const a = snap ? 1 : (1-Math.pow(0.004,dt));
+  camera.position.lerp(_bqCam, a);
+  camera.up.lerp(u, snap?1:(1-Math.pow(0.02,dt))).normalize();
+  _bqLook.addScaledVector(u,1.2);
+  camera.lookAt(_bqLook);
+}
+
+function buildupStep(dt){
+  if(!buildActive) return;
+  buildT+=dt;
+  buildCapsStep();
+  const T=buildT;
+  const orbit = T*0.5;   // 周回アングル
+
+  // Stage 0: グレー球のオーバーシュート出現
+  if(T<1.5){
+    const p=T/0.9; planetMesh.scale.setScalar(1*Math.min(1.05, _easeOutBack(Math.min(1,p))));
+    _buildCam(30, 6, orbit, dt, T<0.05);
+  }
+  // Stage 1: トゥーン＋輪郭が適用（1フレーム差し替え＋白フラッシュ）
+  if(buildStageCap<1 && T>=1.5){
+    buildStageCap=1;
+    planetMesh.material=buildPlanetToonMat; if(buildOutline) buildOutline.visible=true;
+    planetMesh.scale.setScalar(1);
+    flashEl.style.background='radial-gradient(circle,rgba(255,255,255,.9),rgba(255,255,255,.3) 55%,rgba(255,255,255,0) 75%)';
+    flashEl.classList.add('on'); cinLater(()=>{ flashEl.classList.remove('on');
+      flashEl.style.background=''; },60);
+  }
+  if(T>=1.5&&T<3.0){ _buildCam(28, 6, orbit, dt); }
+
+  // Stage 2: 夜が来る（空フェードイン＋昼→夜ライト lerp）
+  if(T>=3.0&&T<4.5){
+    const p=Math.min(1,(T-3.0)/1.0);
+    if(skyStars) skyStars.material.opacity=0.9*p;
+    if(skyDome) skyDome.material.uniforms.op.value=p;
+    scene.fog.density=0.010*p;
+    moon.intensity=0.85*p; hemi.intensity=0.75*p;
+    amb.intensity=1.15+(0.35-1.15)*p; amb.color.lerpColors(new TColor(0xbfc4d2),new TColor(0x2a3566),p);
+    renderer.setClearColor(new TColor(0x05070f).lerp(new TColor(0x0d1330),p),1);
+    _buildCam(26, 7, orbit, dt);
+  }
+
+  // Stage 3: 地形が連鎖ポップ（石畳→街灯→結晶→天文台→立て札…）
+  if(T>=4.5&&T<8.0){
+    const prog=(T-4.5)/3.4;                 // 0→1
+    const n=buildTerrain.length;
+    const shown=Math.floor(prog*n);
+    for(let i=0;i<n;i++){
+      const o=buildTerrain[i];
+      const base=buildPrevScale.get(o);
+      if(i<shown && base){
+        if(!o.userData._popAt){ o.userData._popAt=T; }
+        const pp=Math.min(1,(T-o.userData._popAt)/0.32);
+        popScale(o, base, pp);
+      }
+    }
+    _buildCam(24, 8, orbit, dt);
+  } else if(T>=8.0){
+    buildTerrain.forEach(o=>{ const v=buildPrevScale.get(o); if(v) o.scale.copy(v); });
+  }
+
+  // Stage 4: 旅人ポップ→ランタン点灯→歩き出す＋粒/流れ星解禁
+  if(buildStageCap<4 && T>=8.0){ buildStageCap=4; traveler.userData._popAt=T; }
+  if(T>=8.0&&T<10.0){
+    const pp=Math.min(1,(T-(traveler.userData._popAt||8.0))/0.5);
+    traveler.scale.setScalar(_easeOutBack(pp));
+    shards.forEach(s=>{ const v=buildPrevScale.get(s); const e=_easeOutBack(pp); if(v) s.scale.set(v.x*e,v.y*e,v.z*e); });
+    if(traveler.userData.lp) traveler.userData.lp.intensity=1.7*Math.min(1,(T-8.0)/0.5);
+    // 歩行アニメ（見た目のみ）
+    walkPhase+=dt*7;
+    if(legs[0]){ legs[0].rotation.x=Math.sin(walkPhase)*0.4; legs[1].rotation.x=-Math.sin(walkPhase)*0.4; }
+    if(!buildStar && T>=9.0){ buildStar=true; cinShootStar(); }
+    _buildCam(16, 5, orbit, dt);
+  }
+
+  // Stage 5: 引き→エンドカード→静止
+  if(T>=10.0){
+    const p=Math.min(1,(T-10.0)/2.0);
+    const dist=20+p*36, up=6+p*26;
+    _buildCam(dist, up, orbit*0.5, dt);
+    if(T>=11.0) cinemaTextEl.classList.add('show');
+  }
+  if(T>13.5){ stopBuildup(); return; }
+
+  // 流れ星の移動（update をスキップしているのでここで進める）
+  for(let i=shooters.length-1;i>=0;i--){
+    const s=shooters[i]; s.userData.life+=dt;
+    s.position.addScaledVector(s.userData.dir, s.userData.speed*dt);
+    const l=s.userData.life/s.userData.max;
+    s.material.opacity=Math.sin(Math.min(l,1)*Math.PI)*(s.userData.cine?1.0:0.9);
+    s.scale.set(s.userData.cine?16:8, s.userData.cine?2.6:1.4, 1);
+    if(l>=1){ scene.remove(s); shooters.splice(i,1); }
+  }
+}
+let buildStar=false;
+
 function update(dt){
   // input → forward / turn
   let fwd=0, turn=0;
@@ -1416,7 +1661,8 @@ addEventListener('resize',()=>{
 let last=performance.now();
 function loop(now){
   const dt=Math.min((now-last)/1000,0.05); last=now;
-  if(started) update(dt);
+  if(buildActive) buildupStep(dt);            // ビルドアップ中は通常updateを止めて占有
+  else if(started) update(dt);
   renderer.render(scene,camera);
   requestAnimationFrame(loop);
 }
@@ -1433,6 +1679,9 @@ function begin(){
 }
 document.getElementById('startBtn').addEventListener('click',begin);
 startEl.addEventListener('touchstart',begin,{passive:true});
+// #buildup で自動起動（ビルドアップモード）
+buildBtn.addEventListener('click',e=>{ e.stopPropagation(); buildActive?stopBuildup():(begin(),startBuildup()); });
+if(/buildup/.test(location.hash)){ addEventListener('load',()=>{ begin(); setTimeout(startBuildup,300); }); }
 
 // expose for debug
 // 検証用：シネマの任意秒へジャンプして1フレーム描画（背景タブ・撮影QA向け）
@@ -1455,12 +1704,12 @@ function _cineSeek(t,vert){
 // 検証用：実ループを手動コマ送り（背景タブでもシネマの実挙動を確定的に再現）
 function _pump(sec){
   const steps=Math.round(sec*60);
-  for(let k=0;k<steps;k++){ if(started) update(1/60); }
+  for(let k=0;k<steps;k++){ if(buildActive) buildupStep(1/60); else if(started) update(1/60); }
   renderer.render(scene,camera);
-  return {cinemaT:+cinemaT.toFixed(2), pausesUsed:cinemaPausesUsed, pauseRem:+cinemaPauseRem.toFixed(2), cardShown:cardEl.classList.contains('show')};
+  return {cinemaT:+cinemaT.toFixed(2), buildT:+buildT.toFixed(2), pausesUsed:cinemaPausesUsed, cardShown:cardEl.classList.contains('show'), cap:capEl.textContent, endcard:cinemaTextEl.classList.contains('show')};
 }
 window.__seiya={scene,camera,pivot,shards,visit,collect:()=>shards.forEach(s=>visit(s)),
-  startCinema,stopCinema,cineSeek:_cineSeek,pump:_pump};
+  startCinema,stopCinema,cineSeek:_cineSeek,pump:_pump,startBuildup,stopBuildup};
 })();
 </script>
 </body>
