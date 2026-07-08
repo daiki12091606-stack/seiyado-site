@@ -1452,8 +1452,15 @@ function _cineSeek(t,vert){
   updateCinemaCamera(0.016);
   renderer.render(scene,camera);
 }
+// 検証用：実ループを手動コマ送り（背景タブでもシネマの実挙動を確定的に再現）
+function _pump(sec){
+  const steps=Math.round(sec*60);
+  for(let k=0;k<steps;k++){ if(started) update(1/60); }
+  renderer.render(scene,camera);
+  return {cinemaT:+cinemaT.toFixed(2), pausesUsed:cinemaPausesUsed, pauseRem:+cinemaPauseRem.toFixed(2), cardShown:cardEl.classList.contains('show')};
+}
 window.__seiya={scene,camera,pivot,shards,visit,collect:()=>shards.forEach(s=>visit(s)),
-  startCinema,stopCinema,cineSeek:_cineSeek};
+  startCinema,stopCinema,cineSeek:_cineSeek,pump:_pump};
 })();
 </script>
 </body>
