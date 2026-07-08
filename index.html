@@ -151,10 +151,19 @@
   }
   body.started #recBtn{display:block;}
   #recBtn:hover{opacity:.8;}
+  /* 録画中に隠すのは HUD の操作系のみ。情報カードは残す（見せ場なので） */
   body.recording #recBtn,
   body.recording #progress,
-  body.recording #hud > *:not(#brand){ display:none !important; }
+  body.recording #hint,
+  body.recording #stick,
+  body.recording #clear{ display:none !important; }
   body.recording #brand .title small{ display:none; }   /* 左上ロゴのみ残す */
+
+  /* 金色フラッシュ（回収の見せ場・0.3秒・単発／てんかん配慮） */
+  #flash{position:fixed;inset:0;z-index:28;pointer-events:none;opacity:0;
+    background:radial-gradient(circle at 50% 45%, rgba(255,224,160,.9), rgba(255,212,127,.35) 45%, rgba(255,212,127,0) 72%);
+    transition:opacity .3s ease-out;}
+  #flash.on{opacity:1;transition:opacity .06s ease-in;}
 
   /* エンドカード（金線フレーム・サムネ用） */
   #cinemaText{
@@ -244,6 +253,7 @@
 </div>
 
 <button id="recBtn">● 録画再生</button>
+<div id="flash"></div>
 <div id="cap"></div>
 <div id="cinemaText">
   <div class="main">星 夜 堂</div>
@@ -861,7 +871,7 @@ let cinemaActive=false, cinemaT=0, cinemaPauseRem=0;
 let cinemaAutoFwd=0, cinemaAutoTurn=0, cinemaWpIdx=0, cinemaTextShown=false;
 let cinemaWPs=[];
 let cinemaPausesUsed=0, cinemaSpotPausing=false;
-let cinemaStarShot=false, cinemaConstel=false, cinemaVert=false;
+let cinemaStarShot=false, cinemaConstel=false, cinemaVert=false, cinemaHighlight=false;
 let cinemaPreVisited=null, cinemaOrigRandom=null, cinemaSaveShoot=0;
 const cinTimers=[];
 function cinLater(fn,ms){ cinTimers.push(setTimeout(fn,ms)); }
@@ -886,16 +896,23 @@ function cinCapsStep(){
 // シーケンス中の乱数シード固定（毎回同じ絵になる：撮り直しの再現性）
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 
-// 確定発生の流れ星（カメラ視界を横切る・シード非依存で毎回同じ軌道）
+// 確定発生の流れ星（カメラ視界を横切る・太く明るく長く）
 function cinShootStar(){
   const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:haloTex,color:0xffffff,
     blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:0,fog:false}));
   const cd=new THREE.Vector3(); camera.getWorldDirection(cd);
   const rt=new THREE.Vector3().crossVectors(cd,camera.up).normalize();
-  sp.position.copy(camera.position).addScaledVector(cd,90).addScaledVector(camera.up,45).addScaledVector(rt,38);
-  sp.userData={dir:rt.clone().multiplyScalar(-1).addScaledVector(camera.up,-0.35).addScaledVector(cd,0.1).normalize(),
-    life:0,max:1.5,speed:190};
+  sp.position.copy(camera.position).addScaledVector(cd,80).addScaledVector(camera.up,40).addScaledVector(rt,44);
+  sp.userData={dir:rt.clone().multiplyScalar(-1).addScaledVector(camera.up,-0.28).addScaledVector(cd,0.08).normalize(),
+    life:0,max:1.7,speed:150,cine:true};   // cine:太い長い軌跡（updateのshooter処理で参照）
   scene.add(sp); shooters.push(sp);
+}
+
+// 金色フラッシュ（単発・0.3秒・連続させない：てんかん配慮）
+const flashEl=document.getElementById('flash');
+function cinFlash(){
+  flashEl.classList.add('on');
+  cinLater(()=>flashEl.classList.remove('on'), 70);   // 0.07s立ち上げ→CSSで0.3s減衰
 }
 
 // --- 事前確保ベクトル（毎フレームのGC割り当てゼロ） ---
@@ -912,29 +929,42 @@ function _easeC(t,type){
   if(!type||type==='lin') return t;
   if(type==='out') return 1-(1-t)*(1-t);
   if(type==='io')  return t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+  if(type==='oq')  return 1-Math.pow(1-t,5);          // easeOutQuint：速く入ってゆっくり止まる
+  if(type==='cut') return 1;                           // カット：瞬間切替（区間開始で即B）
   return t;
 }
 
 // --- カメラキーフレーム ---
 // rel:{f=前後, u=上下, r=左右} travelerローカルオフセット / lk:'tr'=旅人, 'pl'=惑星中心
+// lk:'tr'=旅人 / 'pl'=惑星中心 / 'ln'=ランタン(温色クローズアップ)
 const CAM_KF=[
-  {t: 0.0, rel:{f:-6, u:60, r:0},  lk:'tr', ease:'out'},  // Hook: 上空から
-  {t: 1.5, rel:{f:-16,u:16, r:0},  lk:'tr', ease:'out'},
-  {t: 3.0, rel:{f:-9, u:5.2,r:0},  lk:'tr', ease:'out'},  // 追従開始
-  {t: 6.0, rel:{f:-9, u:5.2,r:0},  lk:'tr', ease:'lin'},
-  {t: 7.5, rel:{f:-3, u:4,  r:11}, lk:'tr', ease:'io'},   // サイドショット
-  {t:11.0, rel:{f:-3, u:4,  r:11}, lk:'tr', ease:'lin'},
-  {t:12.5, rel:{f:-28,u:12, r:6},  lk:'pl', ease:'io'},   // World Tour: 引き
-  {t:15.0, rel:{f:-28,u:12, r:6},  lk:'pl', ease:'lin'},
-  {t:16.5, rel:{f:-9, u:5.2,r:0},  lk:'tr', ease:'out'},  // Highlight: 再接近
-  {t:20.0, rel:{f:-7, u:3.5,r:4},  lk:'tr', ease:'lin'},
-  {t:21.5, rel:{f:-50,u:30, r:0},  lk:'pl', ease:'io'},   // Closing: 大引き
+  {t: 0.0, rel:{f:-4, u:52, r:0},  lk:'tr', ease:'oq'},   // Hook: 上空から（30%速く）
+  {t: 1.0, rel:{f:-14,u:13, r:0},  lk:'tr', ease:'oq'},
+  {t: 2.1, rel:{f:-9, u:5.2,r:0},  lk:'tr', ease:'oq'},   // 追従開始（速→止）
+  {t: 5.5, rel:{f:-9, u:5.2,r:0},  lk:'tr', ease:'lin'},
+  {t: 5.5, rel:{f:-3, u:4,  r:11}, lk:'tr', ease:'cut'},  // ★カット1：サイドドリーへ瞬間切替
+  {t: 9.0, rel:{f:-3.6,u:3.6,r:9}, lk:'tr', ease:'oq'},
+  {t:11.5, rel:{f:-3.6,u:3.6,r:9}, lk:'tr', ease:'lin'},  // カード表示中はここで停止（closeupへ）
+  {t:11.5, rel:{f:1.4,u:1.2, r:2}, lk:'ln', ease:'cut'},  // ★カット2：ランタン温色クローズアップ
+  {t:13.5, rel:{f:1.1,u:1.1, r:1.6},lk:'ln', ease:'oq'},
+  {t:14.5, rel:{f:-28,u:12, r:6},  lk:'pl', ease:'oq'},   // 引き（惑星の丸み）
+  {t:15.3, rel:{f:-28,u:12, r:6},  lk:'pl', ease:'lin'},
+  {t:15.3, rel:{f:-8, u:4.6,r:0},  lk:'tr', ease:'oq'},   // Highlight: 回収へ寄る（フラッシュ＋ズーム）
+  {t:20.0, rel:{f:-7, u:3.5,r:4},  lk:'tr', ease:'oq'},
+  {t:21.5, rel:{f:-50,u:30, r:0},  lk:'pl', ease:'oq'},   // Closing: 大引き
   {t:25.0, rel:{f:-58,u:38, r:0},  lk:'pl', ease:'lin'},  // 25秒以降は完全静止（サムネ用）
 ];
 
+const _kLn=new THREE.Vector3();
+function _lanternPos(out){   // ランタン(温色光源)のワールド座標
+  const lp=traveler.userData.lp;
+  if(lp) lp.getWorldPosition(out); else { traveler.getWorldPosition(out); out.y+=1; }
+  return out;
+}
 function _kfPos(kf,out){
   if(kf.abs){ out.copy(kf.abs); return; }
-  traveler.getWorldPosition(out);
+  const base = (kf.lk==='ln') ? _lanternPos(_kLn) : (traveler.getWorldPosition(out),out);
+  out.copy(base);
   _kU2.copy(out).normalize();
   _kF.set(0,0,-1).applyQuaternion(pivot.quaternion).normalize();
   _kR.set(1,0,0).applyQuaternion(pivot.quaternion).normalize();
@@ -945,11 +975,13 @@ function _kfPos(kf,out){
 }
 function _kfLook(kf,out){
   if(kf.lk==='pl'){ out.set(0,0,0); return; }
+  if(kf.lk==='ln'){ _lanternPos(out); return; }   // ランタンを見る
   traveler.getWorldPosition(out);
   _kU2.copy(out).normalize();
   out.addScaledVector(_kU2, 1.6);
 }
 
+let _cinLastSeg=-1;
 function updateCinemaCamera(dt){
   let i=0;
   while(i<CAM_KF.length-2 && cinemaT>CAM_KF[i+1].t) i++;
@@ -963,9 +995,12 @@ function updateCinemaCamera(dt){
   _kLook.lerpVectors(_kfLA,_kfLB,p);
   traveler.getWorldPosition(_kW);
   _kTU.copy(_kW).normalize();
-  const alpha = cinemaT<3.0 ? 1.0 : (1-Math.pow(0.005,dt));
+  // 直前区間がゼロ幅（=カット）だった場合は即スナップ、それ以外はなめらか追従
+  const isCut = (span===0) || (i!==_cinLastSeg && CAM_KF[i].t===CAM_KF[Math.max(0,i-1)].t);
+  _cinLastSeg=i;
+  const alpha = (cinemaT<2.1||isCut) ? 1.0 : (1-Math.pow(0.006,dt));
   camera.position.lerp(_kPos, alpha);
-  camera.up.lerp(_kTU, 1-Math.pow(0.01,dt)).normalize();
+  camera.up.lerp(_kTU, isCut?1.0:(1-Math.pow(0.01,dt))).normalize();
   camera.lookAt(_kLook);
 }
 
@@ -1062,19 +1097,30 @@ function cinemaStep(dt){
   cinemaT+=dt;
   if(cinemaT>27.0){ stopCinema(); return; }
   cinCapsStep();                                    // 字幕①②③
-  if(!cinemaStarShot && cinemaT>=16.0){ cinemaStarShot=true; cinShootStar(); }   // 確定流れ星
-  if(!cinemaConstel && cinemaT>=21.5){              // 星座演出を強制表示
+  // 見せ場：回収の金色フラッシュ（単発）＋近くの灯を点灯（色変化）
+  if(!cinemaHighlight && cinemaT>=15.3){
+    cinemaHighlight=true; cinFlash();
+    traveler.getWorldPosition(_wpP); let best=null,bd=1e9;
+    for(const s of shards){ const d=s.position.distanceTo(_wpP); if(d<bd){bd=d;best=s;} }
+    if(best){ best.userData.core.material.color.set(COL.crys1); best.userData.core.material.emissive.set(COL.crys1);
+      if(best.userData.halo) best.userData.halo.material.color.set(COL.crys1);
+      if(best.userData.ring){ best.userData.ring.material.color.set(COL.crys1); best.userData.ring.material.emissive.set(COL.crys1);} }
+  }
+  if(!cinemaStarShot && cinemaT>=16.2){ cinemaStarShot=true; cinShootStar(); }   // 確定流れ星
+  if(!cinemaConstel && cinemaT>=21.5){              // 星座演出を強制表示（発光2倍・他を暗く）
     cinemaConstel=true;
     if(!constellation) buildConstellation();
+    if(moon) moon.intensity=0.45;                   // 主役化：月光を落とす
+    if(hemi) hemi.intensity=0.4;
   }
   if(cinemaConstel && constellation){
-    const o=Math.min((cinemaT-21.5)*0.55, 0.9);
+    const o=Math.min((cinemaT-21.5)*0.8, 1.0);       // 現状の約2倍の立ち上がり/最大
     constellation.material.opacity=o;
-    constellation.children.forEach(h=>{ if(h.userData.node) h.material.opacity=Math.min(o,0.85); });
+    constellation.children.forEach(h=>{ if(h.userData.node){ h.material.opacity=Math.min(o,1.0); h.scale.setScalar(8*(0.7+0.3*o)); } });
   }
   _autoWalk();
-  // チェックポイント接近 → 情報カードを表示して2.8秒停止（最大3回）
-  if(cinemaPausesUsed<3 && cinemaT<20.5){
+  // チェックポイント接近 → 情報カードを自動で開き3秒表示（1回・8〜12秒帯）
+  if(cinemaPausesUsed<1 && cinemaT<14.0){
     traveler.getWorldPosition(_wpP);
     for(let i=0;i<shards.length;i++){
       const s=shards[i];
@@ -1083,8 +1129,7 @@ function cinemaStep(dt){
         s.userData._cinePaused=true;
         cinemaPausesUsed++;
         visit(s);                     // カード表示（近くに行くと読める、を見せる）
-        cinemaPauseRem=1.0;           // カード表示〜閉じるまで1秒
-
+        cinemaPauseRem=3.0;           // カードを3秒しっかり見せる
         cinemaSpotPausing=true;
         cinemaAutoFwd=0; cinemaAutoTurn=0;
         break;
@@ -1110,7 +1155,8 @@ function startCinema(){
   cinemaWpIdx=0; cinemaTextShown=false;
   cinemaAutoFwd=0; cinemaAutoTurn=0;
   cinemaPausesUsed=0; cinemaSpotPausing=false;
-  cinemaStarShot=false; cinemaConstel=false;
+  cinemaStarShot=false; cinemaConstel=false; cinemaHighlight=false; _cinLastSeg=-1;
+  flashEl.classList.remove('on');
   CIN_CAPS.forEach(c=>c._on=false); capEl.classList.remove('show');
   shards.forEach(s=>s.userData._cinePaused=false);
   cinemaPreVisited=shards.map(s=>!!s.userData.visited);   // 撮り直し再現性：訪問状態を退避
@@ -1144,6 +1190,8 @@ function stopCinema(){
   // 乱数・流れ星タイマーを復元
   if(cinemaOrigRandom){ Math.random=cinemaOrigRandom; cinemaOrigRandom=null; }
   nextShoot=Math.max(1,cinemaSaveShoot)||3;
+  if(moon) moon.intensity=0.85; if(hemi) hemi.intensity=0.75;   // 星座演出で落とした光量を復元
+  flashEl.classList.remove('on');
   // シーケンス中に訪問したスポットを元に戻す（撮り直しで同じ絵になる）
   if(cinemaPreVisited){
     shards.forEach((s,i)=>{
@@ -1274,8 +1322,13 @@ function update(dt){
     const s=shooters[i]; s.userData.life+=dt;
     s.position.addScaledVector(s.userData.dir, s.userData.speed*dt);
     const l=s.userData.life/s.userData.max;
-    s.material.opacity=Math.sin(Math.min(l,1)*Math.PI)*0.9;
-    s.scale.set(8,1.4,1);
+    if(s.userData.cine){   // シネマ用：太く明るく長い
+      s.material.opacity=Math.sin(Math.min(l,1)*Math.PI)*1.0;
+      s.scale.set(16,2.6,1);
+    } else {
+      s.material.opacity=Math.sin(Math.min(l,1)*Math.PI)*0.9;
+      s.scale.set(8,1.4,1);
+    }
     if(l>=1){ scene.remove(s); shooters.splice(i,1); }
   }
 
@@ -1386,12 +1439,15 @@ startEl.addEventListener('touchstart',begin,{passive:true});
 function _cineSeek(t,vert){
   if(!cinemaActive) startCinema();
   cinemaVert=!!vert; document.body.classList.toggle('vertical',cinemaVert);
-  cinemaT=t;
+  cinemaT=t; _cinLastSeg=-1;
   cinCapsStep();
-  cinemaStarShot = t>=16.0;
+  cinemaStarShot = t>=16.2;
+  if(t>=15.3){ cinFlash(); }   // 見せ場の金フラッシュ（QA表示用）
   if(t>=21.5){ if(!constellation) buildConstellation();
-    if(constellation){ const o=Math.min((t-21.5)*0.55,0.9); constellation.material.opacity=o;
-      constellation.children.forEach(h=>{ if(h.userData.node) h.material.opacity=Math.min(o,0.85);}); } }
+    if(moon) moon.intensity=0.45; if(hemi) hemi.intensity=0.4;
+    if(constellation){ const o=Math.min((t-21.5)*0.8,1.0); constellation.material.opacity=o;
+      constellation.children.forEach(h=>{ if(h.userData.node){ h.material.opacity=Math.min(o,1.0); h.scale.setScalar(8*(0.7+0.3*o)); }}); } }
+  else { if(moon) moon.intensity=0.85; if(hemi) hemi.intensity=0.75; }
   if(t>=22.0) cinemaTextEl.classList.add('show'); else cinemaTextEl.classList.remove('show');
   updateCinemaCamera(0.016);
   renderer.render(scene,camera);
